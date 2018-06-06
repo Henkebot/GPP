@@ -8,7 +8,10 @@ class ICommand
 {
 public:
 	virtual ~ICommand() {}
-	virtual void execute(GameActor& actor) = 0;
+	// Execute a command
+	virtual void execute() = 0;
+	// Undo a command
+	virtual void undo() = 0;
 };
 
 #endif // !COMMAND_H

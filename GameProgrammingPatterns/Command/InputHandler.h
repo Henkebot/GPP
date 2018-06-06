@@ -1,19 +1,23 @@
 #ifndef INPUT_HANDLER_H
 #define INPUT_HANDLER_H
+#include <forward_list> // For storing all the recent commands
+#include "GameActor.h"
 
 class ICommand;
 
 class InputHandler
 {
 private:
-	ICommand* m_buttonX;
-	ICommand* m_buttonY;
+	// Used to store all the commands which have been made
+	std::forward_list<ICommand*> m_commandList;
+	
+	// Test actor for this InputHandler
+	GameActor m_unit;
 public:
-	void Record();
-	void Playback();
-
+	// Returns the recent input, can be if no input was recieved
 	ICommand* HandleInput();
-	void BindCommand(int button, ICommand* command);
+	// Undos the recent input made
+	ICommand* ReverseInput();
 private:
 	bool _isKeyPressed(char button) const;
 };
