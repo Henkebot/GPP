@@ -1,4 +1,3 @@
-
 #Game Programming Patterns 
 	<b>Command</b>
 	"Encapsulate a request as an object, thereby letting users parameterize clients with different requests, queue or log requests, and support undoable operations"
