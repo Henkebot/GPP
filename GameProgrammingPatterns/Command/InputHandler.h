@@ -14,6 +14,7 @@ private:
 	// Test actor for this InputHandler
 	GameActor m_unit;
 public:
+	virtual ~InputHandler();
 	// Returns the recent input, can be if no input was recieved
 	ICommand* HandleInput();
 	// Undos the recent input made

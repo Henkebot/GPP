@@ -65,6 +65,17 @@ public:
 	}
 };
 
+InputHandler::~InputHandler()
+{
+	while (false == m_commandList.empty())
+	{
+		ICommand* ptr = m_commandList.front();
+		delete ptr;
+		ptr = nullptr;
+		m_commandList.pop_front();
+	}
+}
+
 ICommand* InputHandler::HandleInput()
 {
 	ICommand* command = nullptr;
