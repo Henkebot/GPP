@@ -616,7 +616,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 				int xMiddle = 1280 >> 1;
 				int yMiddle = 720 >> 1;
 				
-				int radius = sqrt(pow(xMiddle - XMouse, 2) + pow(yMiddle - YMouse, 2));
+				int radius = sqrt(pow(xMiddle >> 1, 2) + pow(yMiddle >> 1, 2));
 		
 				
 				//Win32DrawCircle(&GlobalBackBuffer, { (int16)xMiddle, (int16)yMiddle }, radius, RGB(0, 0, 255));
