@@ -52,6 +52,11 @@ struct TGA_Color
 		}
 	}
 
+	TGA_Color operator*(float val) const
+	{
+		return TGA_Color(r * val, g* val, b * val, a);
+	}
+
 };
 
 class TGA_Image
