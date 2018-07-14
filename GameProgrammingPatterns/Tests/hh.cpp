@@ -2,6 +2,9 @@
 #include <stdint.h>
 #include <fstream>
 #include "../Timer/QPC.cpp"
+#include "../SoftwareRender/Model.h"
+#include <limits>
+
 
 #define internal static
 #define local_persist static
@@ -19,23 +22,6 @@ typedef uint64_t uint64;
 
 #define RGBA(r,g,b,a) (a << 24 | r << 16 | g << 8 | b)
 #define RGB(r,g,b) RGBA(r,g,b,255)
-template <class T>
-struct Vec
-{
-	T x;
-	T y;
-
-	T Dot(const Vec<T>& other) const
-	{
-		return x* other.x + y * other.y;
-	}
-	Vec<T> operator-(const Vec<T>& other) const
-	{
-		return { x - other.x, y - other.y};
-	}
-};
-
-typedef Vec<int16> Vec2i;
 
 
 struct win32_offscreen_buffer
@@ -56,29 +42,34 @@ struct win32_window_dimension
 
 global_variable bool GlobalRunning;
 global_variable win32_offscreen_buffer GlobalBackBuffer;
-global_variable int XOffset = 0;
-global_variable int YOffset = 0;
+global_variable float XOffset = 0;
+global_variable float YOffset = 0;
 global_variable int XMouse;
 global_variable int YMouse;
+global_variable Model* GlobalModel;
+global_variable HDC GlobalDeviceContext;
+global_variable float* GlobalZBuffer;
+global_variable Matrix ViewPort;
 
 internal void
 Win32ClearBuffer(win32_offscreen_buffer* Buffer, int Color)
 {
-	memset(Buffer->Memory, 0, (Buffer->Width*Buffer->Height * 4));
+	
+	memset(Buffer->Memory, Color, Buffer->Height * Buffer->Width * 4);
 }
 
 inline internal void
 Win32SetPixel(win32_offscreen_buffer* Buffer, int X, int Y, int color)
 {
 	
-	int xTarget = (X + XOffset);
-	int yTarget = (Y + YOffset);
+	int xTarget = (X );
+	int yTarget = (Y );
 	if (xTarget < 0 || xTarget >= Buffer->Width || yTarget < 0 || yTarget >= Buffer->Height) return;
 	uint32 *pixel = (uint32*)Buffer->Memory + (xTarget + (yTarget * Buffer->Width));
 	*pixel = color;
 }
 
-
+inline internal
 void line(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int color)
 {
 	bool steep = false;
@@ -115,6 +106,75 @@ void line(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int co
 		{
 			y += (y1 > y0) ? 1 : -1;
 			error2 -= dx * 2;
+		}
+	}
+}
+
+void triangle(Vec3f *pts, win32_offscreen_buffer* Buffer, int color) {
+	
+	//Vec3f t0(pts[0].x, pts[0].y, pts[0].z);
+	//Vec3f t1(pts[1].x, pts[1].y, pts[1].z);
+	//Vec3f t2(pts[2].x, pts[2].y, pts[2].z);
+
+	//if (t0.y == t1.y && t0.y == t2.y) return; // i dont care about degenerate triangles
+	//if (t0.y>t1.y) { std::swap(t0, t1); }
+	//if (t0.y>t2.y) { std::swap(t0, t2);  }
+	//if (t1.y>t2.y) { std::swap(t1, t2);}
+
+	//int total_height = t2.y - t0.y;
+	//for (int i = 0; i<total_height; i++) {
+	//	bool second_half = i>t1.y - t0.y || t1.y == t0.y;
+	//	int segment_height = second_half ? t2.y - t1.y : t1.y - t0.y;
+	//	float alpha = (float)i / total_height;
+	//	float beta = (float)(i - (second_half ? t1.y - t0.y : 0)) / segment_height; // be careful: with above conditions no division by zero here
+	//	Vec3f A = t0 + Vec3f(t2 - t0)*alpha;
+	//	Vec3f B = second_half ? t1 + Vec3f(t2 - t1)*beta : t0 + Vec3f(t1 - t0)*beta;
+	//
+	//	if (A.x>B.x) { std::swap(A, B); }
+	//	for (int j = A.x; j <= B.x; j++) {
+	//		float phi = B.x == A.x ? 1. : (float)(j - A.x) / (float)(B.x - A.x);
+	//		Vec3f   P = Vec3f(A) + Vec3f(B - A)*phi;
+	//		
+	//		int idx = P.x + P.y*1244;
+	//		if (GlobalZBuffer[idx]<P.z) {
+	//			GlobalZBuffer[idx] = P.z;
+	//			
+	//			Win32SetPixel(Buffer, P.x, P.y, color);
+	//		}
+	//	}
+	//}
+
+	Vec2f bboxmin((std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)());
+	Vec2f bboxmax(-(std::numeric_limits<float>::max)(), -(std::numeric_limits<float>::max)());
+	Vec2f clamp(Buffer->Width- 1, Buffer->Height- 1);
+	
+	for (int i = 3; i--;) {
+		for (int j = 2; j--;) {
+			bboxmin[j] = max(0.f,		min(bboxmin[j], pts[i][j]));
+			bboxmax[j] = min(clamp[j],	max(bboxmax[j], pts[i][j]));
+		}
+	}
+	Vec3i P;
+	for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
+		for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
+			
+			Vec3f bc_screen = barycentric(pts, P);
+			if (bc_screen.x<0 || bc_screen.y<0 || bc_screen.z<0) continue;
+			
+			P.z = 0;
+			for (int i = 3; i--;)
+				P.z += pts[i].z * bc_screen[i];
+			
+			int zBufferIndex = P.x + P.y * Buffer->Width;
+
+			float currentValue = GlobalZBuffer[zBufferIndex];
+			if (currentValue < P.z)
+			{
+				GlobalZBuffer[zBufferIndex] = P.z;
+				Win32SetPixel(Buffer, P.x, P.y, RGB((int)(bc_screen.x * 255), 0, (int)(bc_screen.y * 255)));
+				//Win32SetPixel(Buffer, P.x, P.y, RGB(0,255,0));
+			}
+		
 		}
 	}
 }
@@ -393,8 +453,6 @@ Win32GetWindowDimension(HWND Window)
 	return (Result);
 }
 
-
-
 internal void
 RenderWeirdGradient(win32_offscreen_buffer Buffer, int XOffset, int YOffset)
 {
@@ -426,7 +484,8 @@ Win32ResizeDIBSection(HDC DeviceContext, win32_offscreen_buffer *Buffer, int Wid
 
 	if (Buffer->Memory)
 	{
-		VirtualFree(Buffer->Memory, 0, MEM_RELEASE);
+		//VirtualFree(Buffer->Memory, 0, MEM_RELEASE);
+		DeleteObject(Buffer->HBMP);
 	}
 
 	Buffer->Width = Width;
@@ -436,15 +495,15 @@ Win32ResizeDIBSection(HDC DeviceContext, win32_offscreen_buffer *Buffer, int Wid
 
 	Buffer->Info.bmiHeader.biSize = sizeof(Buffer->Info.bmiHeader);
 	Buffer->Info.bmiHeader.biWidth = Buffer->Width;
-	Buffer->Info.bmiHeader.biHeight = -Buffer->Height;
+	Buffer->Info.bmiHeader.biHeight = Buffer->Height;
 	Buffer->Info.bmiHeader.biPlanes = 1;
 	Buffer->Info.bmiHeader.biBitCount = 32;
 	Buffer->Info.bmiHeader.biCompression = BI_RGB;
 
-	//int BitmapMemorySize = (Buffer->Width*Buffer->Height)*BytesPerPixel;
-	//Buffer->Memory = //VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
+	int BitmapMemorySize = (Buffer->Width*Buffer->Height)*BytesPerPixel;
+	Buffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 	
-	Buffer->HBMP = CreateDIBSection(DeviceContext, &Buffer->Info, DIB_RGB_COLORS, &Buffer->Memory, NULL,NULL);
+//	Buffer->HBMP = CreateDIBSection(DeviceContext, &Buffer->Info, DIB_RGB_COLORS, &Buffer->Memory, NULL,NULL);
 	Buffer->Pitch = Width*BytesPerPixel;
 }
 
@@ -454,24 +513,29 @@ Win32DisplayBufferInWindow(HDC DeviceContext,
 	win32_offscreen_buffer Buffer)
 {
 
-	local_persist HDC hMemDC = CreateCompatibleDC(DeviceContext);
-	local_persist HBITMAP hDCBitmap = (HBITMAP) SelectObject(hMemDC, Buffer.HBMP);
-	BitBlt(DeviceContext, 0, 0, Buffer.Width, Buffer.Height, hMemDC, 0, 0, SRCCOPY);
+
 	/*SelectObject(hMemDC, hDCBitmap);
 	DeleteDC(hMemDC);*/
-	//StretchDIBits(DeviceContext,
-	//	/*
-	//	X, Y, Width, Height,
-	//	X, Y, Width, Height,
-	//	*/
-	//	0, 0, WindowWidth, WindowHeight,
-	//	0, 0, Buffer.Width, Buffer.Height,
-	//	Buffer.Memory,
-	//	&Buffer.Info,
-	//	DIB_RGB_COLORS, SRCCOPY);
+	StretchDIBits(DeviceContext,
+
+		0, 0, WindowWidth, WindowHeight,
+		0, 0, Buffer.Width, Buffer.Height,
+		Buffer.Memory,
+		&Buffer.Info,
+		DIB_RGB_COLORS, SRCCOPY);
 
 }
+Matrix viewport(int x, int y, int w, int h) {
+	Matrix m = Matrix::identity(4);
+	m[0][3] = x + w / 2.f;
+	m[1][3] = y + h / 2.f;
+	m[2][3] = 255.f / 2.f;
 
+	m[0][0] = w / 2.f;
+	m[1][1] = h / 2.f;
+	m[2][2] = 255.f / 2.f;
+	return m;
+}
 LRESULT CALLBACK
 Win32MainWindowCallback(HWND Window,
 	UINT Message,
@@ -482,6 +546,11 @@ Win32MainWindowCallback(HWND Window,
 
 	switch (Message)
 	{
+	case WM_SIZE:
+	{
+		Win32ResizeDIBSection(GlobalDeviceContext, &GlobalBackBuffer, LOWORD(LParam), HIWORD(LParam));
+		ViewPort = viewport(LOWORD(LParam) / 8, HIWORD(LParam) / 8, LOWORD(LParam) * 3 / 4, HIWORD(LParam) * 3 / 4);
+	} break;
 	case WM_DESTROY:
 	{
 		GlobalRunning = false;
@@ -508,14 +577,14 @@ Win32MainWindowCallback(HWND Window,
 
 		
 		if(keyCode == 'W')
-			YOffset -=5;
+			YOffset -=0.05f;
 		if (keyCode == 'S')
-			YOffset += 5;
+			YOffset += 0.05f;
 
 		if (keyCode == 'D')
-			XOffset += 5;
+			XOffset += 0.05f;
 		if (keyCode == 'A')
-			XOffset -= 5;
+			XOffset -= 0.05f;
 	
 		
 	} break;
@@ -530,7 +599,7 @@ Win32MainWindowCallback(HWND Window,
 
 	case WM_PAINT:
 	{
-		Win32ClearBuffer(&GlobalBackBuffer, 0);
+		Win32ClearBuffer(&GlobalBackBuffer, RGB(255,0,255));
 		PAINTSTRUCT Paint;
 		HDC DeviceContext = BeginPaint(Window, &Paint);
 
@@ -552,28 +621,79 @@ Win32MainWindowCallback(HWND Window,
 	return(Result);
 }
 
+Vec3f m2v(Matrix m) {
+	return Vec3f(m[0][0] / m[3][0], m[1][0] / m[3][0], m[2][0] / m[3][0]);
+}
 
+
+Matrix v2m(Vec3f v) {
+	Matrix m(4, 1);
+	m[0][0] = v.x;
+	m[1][0] = v.y;
+	m[2][0] = v.z;
+	m[3][0] = 1.f;
+	return m;
+}
+Matrix RotateZ(float angle)
+{
+	Matrix RotationZ;
+	float c = cosf(angle);
+	float s = sinf(angle);
+	RotationZ[0][0] = c;
+	RotationZ[1][0] = 0;
+	RotationZ[2][0] = s;
+	
+	RotationZ[0][1] = 0;
+	RotationZ[1][1] = 1;
+	RotationZ[2][1] = 0;
+	
+	RotationZ[0][2] = -s;
+	RotationZ[1][2] = 0;
+	RotationZ[2][2] = c;
+
+	return RotationZ;
+}
+
+Matrix RotateX(float angle)
+{
+	Matrix RotationZ;
+	float c = cosf(angle);
+	float s = sinf(angle);
+	RotationZ[0][0] = 1;
+	RotationZ[1][0] = 0;
+	RotationZ[2][0] = 0;
+
+	RotationZ[0][1] = 0;
+	RotationZ[1][1] = c;
+	RotationZ[2][1] = -s;
+
+	RotationZ[0][2] = 0;
+	RotationZ[1][2] = s;
+	RotationZ[2][2] = c;
+
+	return RotationZ;
+}
 int CALLBACK
 WinMain(HINSTANCE Instance, // a handle to our executable
 	HINSTANCE PrevInstance,
 	LPSTR CommandLine,
 	int ShowCode)
 {
-	WNDCLASSA WindowClass = {};
+	WNDCLASSW WindowClass = {};
 
 
 	WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
 	WindowClass.hInstance = Instance;
-	//WindowClass.hIcon = ;
-	WindowClass.lpszClassName = "HandmadeHeroWindowClass";
-
-	if (RegisterClassA(&WindowClass))
+	WindowClass.lpszClassName = L"HandmadeHeroWindowClass";
+	GlobalModel = new Model("SoftwareRender/obj/Box.obj");
+	
+	if (RegisterClassW(&WindowClass))
 	{
 		HWND Window =
-			CreateWindowExA(0,
+			CreateWindowExW(0,
 				WindowClass.lpszClassName,
-				"Lol",
+				L"SoftwareRender",
 				WS_OVERLAPPEDWINDOW | WS_VISIBLE,
 				CW_USEDEFAULT,
 				CW_USEDEFAULT,
@@ -585,16 +705,28 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 				0);
 		if (Window)
 		{
-			HDC DeviceContext = GetDC(Window);
+			GlobalDeviceContext = GetDC(Window);
 
-			Win32ResizeDIBSection(DeviceContext, &GlobalBackBuffer, 1280, 720);
+			Win32ResizeDIBSection(GlobalDeviceContext, &GlobalBackBuffer, 1280, 720);
+			win32_window_dimension Dimension = Win32GetWindowDimension(Window);
+
+			int size = GlobalBackBuffer.Width * GlobalBackBuffer.Height;
+			GlobalZBuffer = new float[size];
+			Vec3f light_dir(0, 0, -1);
+			Matrix Projection = Matrix::identity(4);
+			Matrix ViewPort = viewport(GlobalBackBuffer.Width / 8, GlobalBackBuffer.Height / 8, GlobalBackBuffer.Width * 3 / 4, GlobalBackBuffer.Height * 3 / 4);
 			
+			
+
+			Projection[3][2] = -1.f / 3;
 			GlobalRunning = true;
 			while (GlobalRunning)
 			{
+				XOffset += 0.01f;
+				YOffset += 0.01f;
 				ScopedTimer time("Main-Loop");
 				MSG Message;
-				while (PeekMessageA(&Message, 0, 0, 0, PM_REMOVE))
+				while (PeekMessageW(&Message, 0, 0, 0, PM_REMOVE))
 				{
 					if (Message.message == WM_QUIT)
 					{
@@ -602,31 +734,43 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 					}
 
 					TranslateMessage(&Message);
-					DispatchMessageA(&Message);
+					DispatchMessageW(&Message);
+				}
+				Win32ClearBuffer(&GlobalBackBuffer, RGB(255,255,255));
+				for (int i = size; i--;)
+				{
+
+					GlobalZBuffer[i] = 0;
 				}
 				
-				Win32ClearBuffer(&GlobalBackBuffer, 0);
-
-				RECT rect = {};
-				rect.right = 200;
-				rect.bottom = 200;
-				Win32DrawRect(&GlobalBackBuffer, rect, 0xff00ff);
-		
-		
-				int xMiddle = 1280 >> 1;
-				int yMiddle = 720 >> 1;
 				
-				int radius = sqrt(pow(xMiddle >> 1, 2) + pow(yMiddle >> 1, 2));
-		
+				for (int i = 0; i<GlobalModel->nfaces(); i++) {
+					std::vector<int> face = GlobalModel->face(i);
+					Vec3f screen_coords[3];
+					Vec3f world_coords[3];
+					for (int j = 0; j<3; j++) {
+						Vec3f v = GlobalModel->vert(face[j]);
+						v = RotateX(YOffset) * v;
+						v = RotateZ(XOffset) * v;
+						screen_coords[j] = m2v(ViewPort*Projection*v2m(v));
+						world_coords[j] = v;
+					}
+					Vec3f n = (world_coords[2] - world_coords[0]) ^ (world_coords[1] - world_coords[0]);
+					n.norm();
+					float intensity = n*light_dir;
+					if (intensity>0) {
+						
+						triangle(screen_coords, &GlobalBackBuffer,RGB((int)intensity * 255, 255,255));
+					}
+				}
 				
-				//Win32DrawCircle(&GlobalBackBuffer, { (int16)xMiddle, (int16)yMiddle }, radius, RGB(0, 0, 255));
-				Win32DrawCircleFill(&GlobalBackBuffer, { (int16)xMiddle, (int16)yMiddle }, radius, RGB(0, 0, 255));
+		
 				
 				//wuline(xMiddle, yMiddle, XMouse, YMouse, &GlobalBackBuffer, 0xff00ff);
 				//RenderWeirdGradient(GlobalBackBuffer, XOffset, YOffset);
 
 				win32_window_dimension Dimension = Win32GetWindowDimension(Window);
-				Win32DisplayBufferInWindow(DeviceContext,
+				Win32DisplayBufferInWindow(GlobalDeviceContext,
 					Dimension.Width,
 					Dimension.Height,
 					GlobalBackBuffer);
