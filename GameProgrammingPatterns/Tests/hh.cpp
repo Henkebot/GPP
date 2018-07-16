@@ -4,7 +4,10 @@
 #include "../Timer/QPC.cpp"
 #include "../SoftwareRender/Model.h"
 #include <limits>
-
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm.hpp>
+#include <gtx\transform.hpp>
+#include <gtc/matrix_transform.hpp>
 
 #define internal static
 #define local_persist static
@@ -46,16 +49,19 @@ global_variable float XOffset = 0;
 global_variable float YOffset = 0;
 global_variable int XMouse;
 global_variable int YMouse;
+global_variable float W;
+global_variable float S;
 global_variable Model* GlobalModel;
-global_variable HDC GlobalDeviceContext;
+
 global_variable float* GlobalZBuffer;
-global_variable Matrix ViewPort;
+
+
 
 internal void
 Win32ClearBuffer(win32_offscreen_buffer* Buffer, int Color)
 {
-	
 	memset(Buffer->Memory, Color, Buffer->Height * Buffer->Width * 4);
+
 }
 
 inline internal void
@@ -112,37 +118,6 @@ void line(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int co
 
 void triangle(Vec3f *pts, win32_offscreen_buffer* Buffer, int color) {
 	
-	//Vec3f t0(pts[0].x, pts[0].y, pts[0].z);
-	//Vec3f t1(pts[1].x, pts[1].y, pts[1].z);
-	//Vec3f t2(pts[2].x, pts[2].y, pts[2].z);
-
-	//if (t0.y == t1.y && t0.y == t2.y) return; // i dont care about degenerate triangles
-	//if (t0.y>t1.y) { std::swap(t0, t1); }
-	//if (t0.y>t2.y) { std::swap(t0, t2);  }
-	//if (t1.y>t2.y) { std::swap(t1, t2);}
-
-	//int total_height = t2.y - t0.y;
-	//for (int i = 0; i<total_height; i++) {
-	//	bool second_half = i>t1.y - t0.y || t1.y == t0.y;
-	//	int segment_height = second_half ? t2.y - t1.y : t1.y - t0.y;
-	//	float alpha = (float)i / total_height;
-	//	float beta = (float)(i - (second_half ? t1.y - t0.y : 0)) / segment_height; // be careful: with above conditions no division by zero here
-	//	Vec3f A = t0 + Vec3f(t2 - t0)*alpha;
-	//	Vec3f B = second_half ? t1 + Vec3f(t2 - t1)*beta : t0 + Vec3f(t1 - t0)*beta;
-	//
-	//	if (A.x>B.x) { std::swap(A, B); }
-	//	for (int j = A.x; j <= B.x; j++) {
-	//		float phi = B.x == A.x ? 1. : (float)(j - A.x) / (float)(B.x - A.x);
-	//		Vec3f   P = Vec3f(A) + Vec3f(B - A)*phi;
-	//		
-	//		int idx = P.x + P.y*1244;
-	//		if (GlobalZBuffer[idx]<P.z) {
-	//			GlobalZBuffer[idx] = P.z;
-	//			
-	//			Win32SetPixel(Buffer, P.x, P.y, color);
-	//		}
-	//	}
-	//}
 
 	Vec2f bboxmin((std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)());
 	Vec2f bboxmax(-(std::numeric_limits<float>::max)(), -(std::numeric_limits<float>::max)());
@@ -150,31 +125,34 @@ void triangle(Vec3f *pts, win32_offscreen_buffer* Buffer, int color) {
 	
 	for (int i = 3; i--;) {
 		for (int j = 2; j--;) {
-			bboxmin[j] = max(0.f,		min(bboxmin[j], pts[i][j]));
-			bboxmax[j] = min(clamp[j],	max(bboxmax[j], pts[i][j]));
+			bboxmin[j] = glm::max(0.f,		glm::min(bboxmin[j], pts[i][j]));
+			bboxmax[j] = glm::min(clamp[j],	glm::max(bboxmax[j], pts[i][j]));
 		}
 	}
 	Vec3i P;
 	for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
 		for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
-			
+
 			Vec3f bc_screen = barycentric(pts, P);
-			if (bc_screen.x<0 || bc_screen.y<0 || bc_screen.z<0) continue;
-			
+			if (bc_screen.x < 0 || bc_screen.y < 0 || bc_screen.z < 0) continue;
+
 			P.z = 0;
 			for (int i = 3; i--;)
 				P.z += pts[i].z * bc_screen[i];
-			
+
 			int zBufferIndex = P.x + P.y * Buffer->Width;
 
 			float currentValue = GlobalZBuffer[zBufferIndex];
 			if (currentValue < P.z)
 			{
 				GlobalZBuffer[zBufferIndex] = P.z;
-				Win32SetPixel(Buffer, P.x, P.y, RGB((int)(bc_screen.x * 255), 0, (int)(bc_screen.y * 255)));
-				//Win32SetPixel(Buffer, P.x, P.y, RGB(0,255,0));
+				
+				Win32SetPixel(Buffer, P.x, P.y, RGB((int)(bc_screen.x *255.f), (int)(bc_screen.y*255.f), (int)(bc_screen.z*255.f)));
+
 			}
+			//Win32SetPixel(Buffer, P.x, P.y, RGB(0,255,0));
 		
+				
 		}
 	}
 }
@@ -479,7 +457,7 @@ RenderWeirdGradient(win32_offscreen_buffer Buffer, int XOffset, int YOffset)
 }
 
 internal void
-Win32ResizeDIBSection(HDC DeviceContext, win32_offscreen_buffer *Buffer, int Width, int Height)
+Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height)
 {
 
 	if (Buffer->Memory)
@@ -525,17 +503,7 @@ Win32DisplayBufferInWindow(HDC DeviceContext,
 		DIB_RGB_COLORS, SRCCOPY);
 
 }
-Matrix viewport(int x, int y, int w, int h) {
-	Matrix m = Matrix::identity(4);
-	m[0][3] = x + w / 2.f;
-	m[1][3] = y + h / 2.f;
-	m[2][3] = 255.f / 2.f;
 
-	m[0][0] = w / 2.f;
-	m[1][1] = h / 2.f;
-	m[2][2] = 255.f / 2.f;
-	return m;
-}
 LRESULT CALLBACK
 Win32MainWindowCallback(HWND Window,
 	UINT Message,
@@ -548,8 +516,8 @@ Win32MainWindowCallback(HWND Window,
 	{
 	case WM_SIZE:
 	{
-		Win32ResizeDIBSection(GlobalDeviceContext, &GlobalBackBuffer, LOWORD(LParam), HIWORD(LParam));
-		ViewPort = viewport(LOWORD(LParam) / 8, HIWORD(LParam) / 8, LOWORD(LParam) * 3 / 4, HIWORD(LParam) * 3 / 4);
+		Win32ResizeDIBSection(&GlobalBackBuffer, LOWORD(LParam), HIWORD(LParam));
+		//ViewPort = viewport(0,0, LOWORD(LParam), HIWORD(LParam));
 	} break;
 	case WM_DESTROY:
 	{
@@ -634,45 +602,19 @@ Matrix v2m(Vec3f v) {
 	m[3][0] = 1.f;
 	return m;
 }
-Matrix RotateZ(float angle)
-{
-	Matrix RotationZ;
-	float c = cosf(angle);
-	float s = sinf(angle);
-	RotationZ[0][0] = c;
-	RotationZ[1][0] = 0;
-	RotationZ[2][0] = s;
-	
-	RotationZ[0][1] = 0;
-	RotationZ[1][1] = 1;
-	RotationZ[2][1] = 0;
-	
-	RotationZ[0][2] = -s;
-	RotationZ[1][2] = 0;
-	RotationZ[2][2] = c;
 
-	return RotationZ;
+Matrix viewport(int x, int y, int w, int h) {
+	Matrix m = Matrix::identity(4);
+	m[0][3] = x + w / 2.f;
+	m[1][3] = y + h / 2.f;
+	m[2][3] = 255.f / 2.f;
+
+	m[0][0] = w / 2.f;
+	m[1][1] = h / 2.f;
+	m[2][2] = 255.f / 2.f;
+	return m;
 }
 
-Matrix RotateX(float angle)
-{
-	Matrix RotationZ;
-	float c = cosf(angle);
-	float s = sinf(angle);
-	RotationZ[0][0] = 1;
-	RotationZ[1][0] = 0;
-	RotationZ[2][0] = 0;
-
-	RotationZ[0][1] = 0;
-	RotationZ[1][1] = c;
-	RotationZ[2][1] = -s;
-
-	RotationZ[0][2] = 0;
-	RotationZ[1][2] = s;
-	RotationZ[2][2] = c;
-
-	return RotationZ;
-}
 int CALLBACK
 WinMain(HINSTANCE Instance, // a handle to our executable
 	HINSTANCE PrevInstance,
@@ -705,20 +647,23 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 				0);
 		if (Window)
 		{
-			GlobalDeviceContext = GetDC(Window);
+			HDC GlobalDeviceContext = GetDC(Window);
 
-			Win32ResizeDIBSection(GlobalDeviceContext, &GlobalBackBuffer, 1280, 720);
+			Win32ResizeDIBSection(&GlobalBackBuffer, 1280, 720);
 			win32_window_dimension Dimension = Win32GetWindowDimension(Window);
 
 			int size = GlobalBackBuffer.Width * GlobalBackBuffer.Height;
 			GlobalZBuffer = new float[size];
 			Vec3f light_dir(0, 0, -1);
-			Matrix Projection = Matrix::identity(4);
-			Matrix ViewPort = viewport(GlobalBackBuffer.Width / 8, GlobalBackBuffer.Height / 8, GlobalBackBuffer.Width * 3 / 4, GlobalBackBuffer.Height * 3 / 4);
 			
 			
+			
+			glm::mat4 projection(1.0f);
+			glm::mat4 view(1.0f);
+			view = glm::lookAt(glm::vec3(-2, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+			projection = glm::perspectiveFov(45.f, (float)GlobalBackBuffer.Width, (float)GlobalBackBuffer.Height, 1.f, 100.f);
+			glm::vec4 viewport(0, 0, GlobalBackBuffer.Width, GlobalBackBuffer.Height);
 
-			Projection[3][2] = -1.f / 3;
 			GlobalRunning = true;
 			while (GlobalRunning)
 			{
@@ -736,38 +681,50 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 					TranslateMessage(&Message);
 					DispatchMessageW(&Message);
 				}
-				Win32ClearBuffer(&GlobalBackBuffer, RGB(255,255,255));
+				Win32ClearBuffer(&GlobalBackBuffer, 0);
 				for (int i = size; i--;)
 				{
 
-					GlobalZBuffer[i] = 0;
+					GlobalZBuffer[i] = (std::numeric_limits<float>::min)();
 				}
 				
-				
+				//view = glm::lookAt(glm::vec3(XOffset, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
 				for (int i = 0; i<GlobalModel->nfaces(); i++) {
 					std::vector<int> face = GlobalModel->face(i);
 					Vec3f screen_coords[3];
 					Vec3f world_coords[3];
+					
 					for (int j = 0; j<3; j++) {
+
 						Vec3f v = GlobalModel->vert(face[j]);
-						v = RotateX(YOffset) * v;
-						v = RotateZ(XOffset) * v;
-						screen_coords[j] = m2v(ViewPort*Projection*v2m(v));
-						world_coords[j] = v;
+						glm::vec4 original(v.x, v.y, v.z, 1.0f);
+						original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
+						original = glm::translate(glm::vec3(0, 0, 2)) * original;
+						
+						int w = GlobalBackBuffer.Width;
+						int h = GlobalBackBuffer.Height;
+
+						glm::vec4 projected = projection * original;
+						glm::vec4 ndc = projected / projected.w;
+						ndc.x += 1.0f; ndc.y += 1.0f; ndc.z += 1.0f;
+						ndc.x *= 0.5f * (float)w;
+						ndc.y *= 0.5f * (float)h;
+						ndc.z *= 0.5f * 100.f;
+		
+						glm::vec4 winCoords = ndc;
+			
+						screen_coords[j] = Vec3f(winCoords.x, winCoords.y, winCoords.z);
+						world_coords[j] = Vec3f(original.x, original.y, original.z);
 					}
 					Vec3f n = (world_coords[2] - world_coords[0]) ^ (world_coords[1] - world_coords[0]);
 					n.norm();
 					float intensity = n*light_dir;
-					if (intensity>0) {
-						
-						triangle(screen_coords, &GlobalBackBuffer,RGB((int)intensity * 255, 255,255));
-					}
+					
+					if(intensity < 0)
+						triangle(screen_coords, &GlobalBackBuffer,0);
+					
 				}
 				
-		
-				
-				//wuline(xMiddle, yMiddle, XMouse, YMouse, &GlobalBackBuffer, 0xff00ff);
-				//RenderWeirdGradient(GlobalBackBuffer, XOffset, YOffset);
 
 				win32_window_dimension Dimension = Win32GetWindowDimension(Window);
 				Win32DisplayBufferInWindow(GlobalDeviceContext,
