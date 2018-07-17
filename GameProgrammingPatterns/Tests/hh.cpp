@@ -118,9 +118,10 @@ void line(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int co
 
 void triangle(Vec3f *pts, win32_offscreen_buffer* Buffer, int color) {
 	
+	
 
-	Vec2f bboxmin((std::numeric_limits<float>::max)(), (std::numeric_limits<float>::max)());
-	Vec2f bboxmax(-(std::numeric_limits<float>::max)(), -(std::numeric_limits<float>::max)());
+	Vec2f bboxmin(Buffer->Width, Buffer->Height);
+	Vec2f bboxmax(0,0);
 	Vec2f clamp(Buffer->Width- 1, Buffer->Height- 1);
 	
 	for (int i = 3; i--;) {
@@ -138,19 +139,24 @@ void triangle(Vec3f *pts, win32_offscreen_buffer* Buffer, int color) {
 
 			P.z = 0;
 			for (int i = 3; i--;)
+			{
 				P.z += pts[i].z * bc_screen[i];
+			}
 
 			int zBufferIndex = P.x + P.y * Buffer->Width;
 
 			float currentValue = GlobalZBuffer[zBufferIndex];
-			if (currentValue < P.z)
+			if (currentValue > P.z)
 			{
 				GlobalZBuffer[zBufferIndex] = P.z;
 				
-				Win32SetPixel(Buffer, P.x, P.y, RGB((int)(bc_screen.x *255.f), (int)(bc_screen.y*255.f), (int)(bc_screen.z*255.f)));
+				//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(bc_screen.x *255.f), (int)(bc_screen.y*255.f), (int)(bc_screen.z*255.f)));
+				//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(P.z), (int)(P.z), (int)(P.z)));
+				Win32SetPixel(Buffer, P.x, P.y, color);
 
 			}
-			//Win32SetPixel(Buffer, P.x, P.y, RGB(0,255,0));
+			//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(P.z), (int)(P.z), (int)(P.z)));
+			
 		
 				
 		}
@@ -628,7 +634,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
 	WindowClass.hInstance = Instance;
 	WindowClass.lpszClassName = L"HandmadeHeroWindowClass";
-	GlobalModel = new Model("SoftwareRender/obj/Box.obj");
+	GlobalModel = new Model("SoftwareRender/obj/African_head.obj");
 	
 	if (RegisterClassW(&WindowClass))
 	{
@@ -639,8 +645,8 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 				WS_OVERLAPPEDWINDOW | WS_VISIBLE,
 				CW_USEDEFAULT,
 				CW_USEDEFAULT,
-				CW_USEDEFAULT,
-				CW_USEDEFAULT,
+				1280,
+				720,
 				0,
 				0,
 				Instance,
@@ -654,21 +660,32 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 
 			int size = GlobalBackBuffer.Width * GlobalBackBuffer.Height;
 			GlobalZBuffer = new float[size];
-			Vec3f light_dir(0, 0, -1);
+			glm::vec3 light_dir(0, 0, -1);
 			
 			
 			
 			glm::mat4 projection(1.0f);
 			glm::mat4 view(1.0f);
-			view = glm::lookAt(glm::vec3(-2, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-			projection = glm::perspectiveFov(45.f, (float)GlobalBackBuffer.Width, (float)GlobalBackBuffer.Height, 1.f, 100.f);
+			view = glm::lookAtLH(glm::vec3(0, 0, -2), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+			projection = glm::perspectiveFovLH(45.f, (float)GlobalBackBuffer.Width, (float)GlobalBackBuffer.Height, .1f, 100.f);
 			glm::vec4 viewport(0, 0, GlobalBackBuffer.Width, GlobalBackBuffer.Height);
 
 			GlobalRunning = true;
 			while (GlobalRunning)
 			{
-				XOffset += 0.01f;
-				YOffset += 0.01f;
+				local_persist float lastX;
+				local_persist float lastY;
+				bool dirty = false;
+				if (lastX != XOffset)
+				{
+					lastX = XOffset;
+					dirty = true;
+				}
+				if (lastY != YOffset)
+				{
+					lastY = YOffset;
+					dirty = true;
+				}
 				ScopedTimer time("Main-Loop");
 				MSG Message;
 				while (PeekMessageW(&Message, 0, 0, 0, PM_REMOVE))
@@ -681,49 +698,67 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 					TranslateMessage(&Message);
 					DispatchMessageW(&Message);
 				}
-				Win32ClearBuffer(&GlobalBackBuffer, 0);
-				for (int i = size; i--;)
+				if (dirty)
 				{
+					Win32ClearBuffer(&GlobalBackBuffer, 0);
+					for (int i = size; i--;)
+					{
 
-					GlobalZBuffer[i] = (std::numeric_limits<float>::min)();
+						GlobalZBuffer[i] = (std::numeric_limits<float>::max)();
+					}
+
+					//view = glm::lookAt(glm::vec3(0, 0, -XOffset), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+					for (int i = 0; i<GlobalModel->nfaces(); i++) {
+						std::vector<int> face = GlobalModel->face(i);
+						Vec3f screen_coords[3];
+						glm::vec3 world_coords[3];
+
+						for (int j = 0; j<3; j++) {
+
+							Vec3f v = GlobalModel->vert(face[j]);
+							glm::vec4 original(v.x, v.y, v.z, 1.0f);
+							original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
+							original = glm::translate(glm::vec3(0, 0, YOffset + 10)) * original;
+
+							int w = GlobalBackBuffer.Width;
+							int h = GlobalBackBuffer.Height;
+
+							glm::vec4 projected = projection * original;
+							glm::vec4 ndc = projected / projected.w;
+							ndc.x += 1.0f; ndc.y += 1.0f; ndc.z = ndc.z * 255;
+							ndc.x *= 0.5f * (float)w;
+							ndc.y *= 0.5f * (float)h;
+
+
+
+							glm::vec4 winCoords = ndc;
+
+							screen_coords[j] = Vec3f(winCoords.x, winCoords.y, winCoords.z);
+							world_coords[j] = glm::vec3(original);
+						}
+
+						glm::vec3 n = glm::cross(world_coords[0] - world_coords[1], world_coords[0] - world_coords[2]);
+						n = glm::normalize(n);
+					
+						float intensity = glm::dot(n, -light_dir);
+						if (intensity < 0)
+						{
+							intensity = 1 - intensity;
+							triangle(screen_coords, &GlobalBackBuffer, RGB((int)(255 * intensity), (int)(255 * intensity), (int)(255 * intensity)));
+						}
+						/*line(screen_coords[0].x, screen_coords[0].y, screen_coords[1].x, screen_coords[1].y, &GlobalBackBuffer, 0xff00ff);
+						line(screen_coords[1].x, screen_coords[1].y, screen_coords[2].x, screen_coords[2].y, &GlobalBackBuffer, 0xff00ff);
+						line(screen_coords[2].x, screen_coords[2].y, screen_coords[0].x, screen_coords[0].y, &GlobalBackBuffer, 0xff00ff);*/
+
+
+
+
+
+					}
 				}
 				
-				//view = glm::lookAt(glm::vec3(XOffset, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-				for (int i = 0; i<GlobalModel->nfaces(); i++) {
-					std::vector<int> face = GlobalModel->face(i);
-					Vec3f screen_coords[3];
-					Vec3f world_coords[3];
-					
-					for (int j = 0; j<3; j++) {
 
-						Vec3f v = GlobalModel->vert(face[j]);
-						glm::vec4 original(v.x, v.y, v.z, 1.0f);
-						original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
-						original = glm::translate(glm::vec3(0, 0, 2)) * original;
-						
-						int w = GlobalBackBuffer.Width;
-						int h = GlobalBackBuffer.Height;
 
-						glm::vec4 projected = projection * original;
-						glm::vec4 ndc = projected / projected.w;
-						ndc.x += 1.0f; ndc.y += 1.0f; ndc.z += 1.0f;
-						ndc.x *= 0.5f * (float)w;
-						ndc.y *= 0.5f * (float)h;
-						ndc.z *= 0.5f * 100.f;
-		
-						glm::vec4 winCoords = ndc;
-			
-						screen_coords[j] = Vec3f(winCoords.x, winCoords.y, winCoords.z);
-						world_coords[j] = Vec3f(original.x, original.y, original.z);
-					}
-					Vec3f n = (world_coords[2] - world_coords[0]) ^ (world_coords[1] - world_coords[0]);
-					n.norm();
-					float intensity = n*light_dir;
-					
-					if(intensity < 0)
-						triangle(screen_coords, &GlobalBackBuffer,0);
-					
-				}
 				
 
 				win32_window_dimension Dimension = Win32GetWindowDimension(Window);
