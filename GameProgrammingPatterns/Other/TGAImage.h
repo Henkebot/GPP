@@ -88,6 +88,8 @@ public:
 	bool scale(int w, int h);
 	TGA_Color get(int x, int y);
 	bool set(int x, int y, TGA_Color c);
+	int get_width() const;
+	int get_height() const;
 
 
 };

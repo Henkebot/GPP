@@ -341,3 +341,13 @@ bool TGA_Image::set(int x, int y, TGA_Color c)
 	memcpy(data + (x + y * width) * bytesPerPixel, c.raw, bytesPerPixel);
 	return true;
 }
+
+int TGA_Image::get_width() const
+{
+	return width;
+}
+
+int TGA_Image::get_height() const
+{
+	return height;
+}

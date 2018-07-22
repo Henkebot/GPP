@@ -4,6 +4,7 @@
 #include "../Timer/QPC.cpp"
 #include "../SoftwareRender/Model.h"
 #include <limits>
+#include "../Other/TGAImage.h"
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm.hpp>
 #include <gtx\transform.hpp>
@@ -52,6 +53,7 @@ global_variable int YMouse;
 global_variable float W;
 global_variable float S;
 global_variable Model* GlobalModel;
+global_variable TGA_Image GlobalDiffuseTexture;
 
 global_variable float* GlobalZBuffer;
 
@@ -116,9 +118,44 @@ void line(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int co
 	}
 }
 
-void triangle(Vec3f *pts, win32_offscreen_buffer* Buffer, int color) {
-	
-	
+void triangle(Vec3f *pts,glm::vec2* uvs, win32_offscreen_buffer* Buffer, float _color) {
+	//glm::vec3 t0 = glm::vec3(pts[0].x, pts[0].y, pts[0].z);
+	//glm::vec3 t1 = glm::vec3(pts[1].x, pts[1].y, pts[1].z);
+	//glm::vec3 t2 = glm::vec3(pts[2].x, pts[2].y, pts[2].z);
+
+	//glm::vec2 uv0 = uvs[0];
+	//glm::vec2 uv1 = uvs[1];
+	//glm::vec2 uv2 = uvs[2];
+
+	//if (t0.y == t1.y && t0.y == t2.y) return; // i dont care about degenerate triangles
+	//if (t0.y>t1.y) { std::swap(t0, t1); std::swap(uv0, uv1); }
+	//if (t0.y>t2.y) { std::swap(t0, t2); std::swap(uv0, uv2); }
+	//if (t1.y>t2.y) { std::swap(t1, t2); std::swap(uv1, uv2); }
+
+	//int total_height = t2.y - t0.y;
+	//for (int i = 0; i<total_height; i++) {
+	//	bool second_half = i>t1.y - t0.y || t1.y == t0.y;
+	//	int segment_height = second_half ? t2.y - t1.y : t1.y - t0.y;
+	//	float alpha = (float)i / total_height;
+	//	float beta = (float)(i - (second_half ? t1.y - t0.y : 0)) / segment_height; // be careful: with above conditions no division by zero here
+	//	glm::vec3 A = (t0 + (t2 - t0)*alpha);
+	//	glm::vec3 B = second_half ? t1 + (t2 - t1)*beta : t0 + (t1 - t0)*beta;
+	//	glm::vec2 uvA = uv0 + (uv2 - uv0)*alpha;
+	//	glm::vec2 uvB = second_half ? uv1 + (uv2 - uv1)*beta : uv0 + (uv1 - uv0)*beta;
+	//	if (A.x>B.x) { std::swap(A, B); std::swap(uvA, uvB); }
+	//	for (int j = A.x; j <= B.x; j++) {
+	//		float phi = B.x == A.x ? 1. : (float)(j - A.x) / (B.x - A.x);
+	//		glm::vec3   P = A + (B - A)*phi;
+	//		glm::vec2 uvP = uvA + (uvB - uvA)*phi;
+	//		int idx = P.x + P.y*Buffer->Width;
+	//		if (idx > 921600 - 1 || idx < 0) continue;
+	//		if (GlobalZBuffer[idx]>P.z) {
+	//			GlobalZBuffer[idx] = P.z;
+	//			//image.set(P.x, P.y, model->diffuse(uvP)*intensity);
+	//			Win32SetPixel(Buffer, P.x, P.y, RGB(GlobalModel->diffuse(Vec2i(uvP.x, uvP.y)).r, GlobalModel->diffuse(Vec2i(uvP.x, uvP.y)).g, GlobalModel->diffuse(Vec2i(uvP.x, uvP.y)).b));
+	//		}
+	//	}
+	//}
 
 	Vec2f bboxmin(Buffer->Width, Buffer->Height);
 	Vec2f bboxmax(0,0);
@@ -152,7 +189,10 @@ void triangle(Vec3f *pts, win32_offscreen_buffer* Buffer, int color) {
 				
 				//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(bc_screen.x *255.f), (int)(bc_screen.y*255.f), (int)(bc_screen.z*255.f)));
 				//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(P.z), (int)(P.z), (int)(P.z)));
-				Win32SetPixel(Buffer, P.x, P.y, color);
+				
+				glm::vec2 finalUv = uvs[0] * bc_screen.x + uvs[1] * bc_screen.y + uvs[2] * bc_screen.z;
+				TGA_Color color = GlobalModel->diffuse(Vec2i(finalUv.x, finalUv.y));
+				Win32SetPixel(Buffer, P.x, P.y, RGB((int)(color.r* _color),(int)(color.g * _color), (int)(color.b * _color)));
 
 			}
 			//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(P.z), (int)(P.z), (int)(P.z)));
@@ -595,31 +635,7 @@ Win32MainWindowCallback(HWND Window,
 	return(Result);
 }
 
-Vec3f m2v(Matrix m) {
-	return Vec3f(m[0][0] / m[3][0], m[1][0] / m[3][0], m[2][0] / m[3][0]);
-}
 
-
-Matrix v2m(Vec3f v) {
-	Matrix m(4, 1);
-	m[0][0] = v.x;
-	m[1][0] = v.y;
-	m[2][0] = v.z;
-	m[3][0] = 1.f;
-	return m;
-}
-
-Matrix viewport(int x, int y, int w, int h) {
-	Matrix m = Matrix::identity(4);
-	m[0][3] = x + w / 2.f;
-	m[1][3] = y + h / 2.f;
-	m[2][3] = 255.f / 2.f;
-
-	m[0][0] = w / 2.f;
-	m[1][1] = h / 2.f;
-	m[2][2] = 255.f / 2.f;
-	return m;
-}
 
 int CALLBACK
 WinMain(HINSTANCE Instance, // a handle to our executable
@@ -634,7 +650,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
 	WindowClass.hInstance = Instance;
 	WindowClass.lpszClassName = L"HandmadeHeroWindowClass";
-	GlobalModel = new Model("SoftwareRender/obj/African_head.obj");
+	GlobalModel = new Model("SoftwareRender/obj/african_head.obj");
 	
 	if (RegisterClassW(&WindowClass))
 	{
@@ -663,13 +679,14 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 			glm::vec3 light_dir(0, 0, -1);
 			
 			
+
 			
 			glm::mat4 projection(1.0f);
 			glm::mat4 view(1.0f);
-			view = glm::lookAtLH(glm::vec3(0, 0, -2), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
 			projection = glm::perspectiveFovLH(45.f, (float)GlobalBackBuffer.Width, (float)GlobalBackBuffer.Height, .1f, 100.f);
-			glm::vec4 viewport(0, 0, GlobalBackBuffer.Width, GlobalBackBuffer.Height);
 
+			glm::vec4 viewport(0, 0, GlobalBackBuffer.Width, GlobalBackBuffer.Height);
+			glm::vec3 position(0, 0, YOffset + 10);
 			GlobalRunning = true;
 			while (GlobalRunning)
 			{
@@ -707,7 +724,8 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 						GlobalZBuffer[i] = (std::numeric_limits<float>::max)();
 					}
 
-					//view = glm::lookAt(glm::vec3(0, 0, -XOffset), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+					position = glm::vec3(0, 0, -YOffset + 5);
+					view = glm::lookAtLH(position, glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
 					for (int i = 0; i<GlobalModel->nfaces(); i++) {
 						std::vector<int> face = GlobalModel->face(i);
 						Vec3f screen_coords[3];
@@ -717,13 +735,14 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 
 							Vec3f v = GlobalModel->vert(face[j]);
 							glm::vec4 original(v.x, v.y, v.z, 1.0f);
+							original = glm::rotate(2*3.1415f, glm::vec3(1, 0, 0)) * original;
 							original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
-							original = glm::translate(glm::vec3(0, 0, YOffset + 10)) * original;
+							
 
 							int w = GlobalBackBuffer.Width;
 							int h = GlobalBackBuffer.Height;
 
-							glm::vec4 projected = projection * original;
+							glm::vec4 projected = projection *view* original;
 							glm::vec4 ndc = projected / projected.w;
 							ndc.x += 1.0f; ndc.y += 1.0f; ndc.z = ndc.z * 255;
 							ndc.x *= 0.5f * (float)w;
@@ -734,23 +753,24 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 							glm::vec4 winCoords = ndc;
 
 							screen_coords[j] = Vec3f(winCoords.x, winCoords.y, winCoords.z);
-							world_coords[j] = glm::vec3(original);
+							world_coords[j] = view* original;
 						}
 
-						glm::vec3 n = glm::cross(world_coords[0] - world_coords[1], world_coords[0] - world_coords[2]);
+						glm::vec3 n = glm::cross(world_coords[1] - world_coords[0], world_coords[2] - world_coords[0]);
 						n = glm::normalize(n);
 					
-						float intensity = glm::dot(n, -light_dir);
-						if (intensity < 0)
+						float intensity = glm::dot(n, -world_coords[0]);
+						if (intensity >= 0)
 						{
-							intensity = 1 - intensity;
-							triangle(screen_coords, &GlobalBackBuffer, RGB((int)(255 * intensity), (int)(255 * intensity), (int)(255 * intensity)));
+							glm::vec2 uv[3];
+							for (int k = 0; k < 3;k++)
+							{
+								uv[k] = glm::vec2(GlobalModel->uv(i, k).x, GlobalModel->uv(i, k).y);
+							}
+							//intensity = 1 - intensity;
+							triangle(screen_coords, uv, &GlobalBackBuffer, 1);
 						}
-						/*line(screen_coords[0].x, screen_coords[0].y, screen_coords[1].x, screen_coords[1].y, &GlobalBackBuffer, 0xff00ff);
-						line(screen_coords[1].x, screen_coords[1].y, screen_coords[2].x, screen_coords[2].y, &GlobalBackBuffer, 0xff00ff);
-						line(screen_coords[2].x, screen_coords[2].y, screen_coords[0].x, screen_coords[0].y, &GlobalBackBuffer, 0xff00ff);*/
-
-
+						
 
 
 
