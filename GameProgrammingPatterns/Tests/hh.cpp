@@ -31,11 +31,15 @@ typedef uint64_t uint64;
 struct win32_offscreen_buffer
 {
 	BITMAPINFO Info;
-	HBITMAP HBMP;
 	void *Memory;
 	int Width;
 	int Height;
 	int Pitch;
+};
+
+struct Buffer
+{
+	
 };
 
 struct win32_window_dimension
@@ -53,18 +57,12 @@ global_variable int YMouse;
 global_variable float W;
 global_variable float S;
 global_variable Model* GlobalModel;
-global_variable TGA_Image GlobalDiffuseTexture;
 
 global_variable float* GlobalZBuffer;
 
 
 
-internal void
-Win32ClearBuffer(win32_offscreen_buffer* Buffer, int Color)
-{
-	memset(Buffer->Memory, Color, Buffer->Height * Buffer->Width * 4);
 
-}
 
 inline internal void
 Win32SetPixel(win32_offscreen_buffer* Buffer, int X, int Y, int color)
@@ -75,6 +73,15 @@ Win32SetPixel(win32_offscreen_buffer* Buffer, int X, int Y, int color)
 	if (xTarget < 0 || xTarget >= Buffer->Width || yTarget < 0 || yTarget >= Buffer->Height) return;
 	uint32 *pixel = (uint32*)Buffer->Memory + (xTarget + (yTarget * Buffer->Width));
 	*pixel = color;
+}
+
+internal void
+Win32ClearBuffer(win32_offscreen_buffer* Buffer, int Color)
+{
+	for (int x = Buffer->Width; x--;)
+		for (int y = Buffer->Height; y--;)
+			Win32SetPixel(Buffer, x, y, Color);
+
 }
 
 inline internal
@@ -118,44 +125,10 @@ void line(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int co
 	}
 }
 
-void triangle(Vec3f *pts,glm::vec2* uvs, win32_offscreen_buffer* Buffer, float _color) {
-	//glm::vec3 t0 = glm::vec3(pts[0].x, pts[0].y, pts[0].z);
-	//glm::vec3 t1 = glm::vec3(pts[1].x, pts[1].y, pts[1].z);
-	//glm::vec3 t2 = glm::vec3(pts[2].x, pts[2].y, pts[2].z);
+inline internal void 
+triangle(Vec3f *pts,glm::vec2* uvs, glm::vec3* norms, win32_offscreen_buffer* Buffer, float _color) 
+{
 
-	//glm::vec2 uv0 = uvs[0];
-	//glm::vec2 uv1 = uvs[1];
-	//glm::vec2 uv2 = uvs[2];
-
-	//if (t0.y == t1.y && t0.y == t2.y) return; // i dont care about degenerate triangles
-	//if (t0.y>t1.y) { std::swap(t0, t1); std::swap(uv0, uv1); }
-	//if (t0.y>t2.y) { std::swap(t0, t2); std::swap(uv0, uv2); }
-	//if (t1.y>t2.y) { std::swap(t1, t2); std::swap(uv1, uv2); }
-
-	//int total_height = t2.y - t0.y;
-	//for (int i = 0; i<total_height; i++) {
-	//	bool second_half = i>t1.y - t0.y || t1.y == t0.y;
-	//	int segment_height = second_half ? t2.y - t1.y : t1.y - t0.y;
-	//	float alpha = (float)i / total_height;
-	//	float beta = (float)(i - (second_half ? t1.y - t0.y : 0)) / segment_height; // be careful: with above conditions no division by zero here
-	//	glm::vec3 A = (t0 + (t2 - t0)*alpha);
-	//	glm::vec3 B = second_half ? t1 + (t2 - t1)*beta : t0 + (t1 - t0)*beta;
-	//	glm::vec2 uvA = uv0 + (uv2 - uv0)*alpha;
-	//	glm::vec2 uvB = second_half ? uv1 + (uv2 - uv1)*beta : uv0 + (uv1 - uv0)*beta;
-	//	if (A.x>B.x) { std::swap(A, B); std::swap(uvA, uvB); }
-	//	for (int j = A.x; j <= B.x; j++) {
-	//		float phi = B.x == A.x ? 1. : (float)(j - A.x) / (B.x - A.x);
-	//		glm::vec3   P = A + (B - A)*phi;
-	//		glm::vec2 uvP = uvA + (uvB - uvA)*phi;
-	//		int idx = P.x + P.y*Buffer->Width;
-	//		if (idx > 921600 - 1 || idx < 0) continue;
-	//		if (GlobalZBuffer[idx]>P.z) {
-	//			GlobalZBuffer[idx] = P.z;
-	//			//image.set(P.x, P.y, model->diffuse(uvP)*intensity);
-	//			Win32SetPixel(Buffer, P.x, P.y, RGB(GlobalModel->diffuse(Vec2i(uvP.x, uvP.y)).r, GlobalModel->diffuse(Vec2i(uvP.x, uvP.y)).g, GlobalModel->diffuse(Vec2i(uvP.x, uvP.y)).b));
-	//		}
-	//	}
-	//}
 
 	Vec2f bboxmin(Buffer->Width, Buffer->Height);
 	Vec2f bboxmax(0,0);
@@ -186,16 +159,21 @@ void triangle(Vec3f *pts,glm::vec2* uvs, win32_offscreen_buffer* Buffer, float _
 			if (currentValue > P.z)
 			{
 				GlobalZBuffer[zBufferIndex] = P.z;
-				
-				//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(bc_screen.x *255.f), (int)(bc_screen.y*255.f), (int)(bc_screen.z*255.f)));
-				//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(P.z), (int)(P.z), (int)(P.z)));
-				
+
 				glm::vec2 finalUv = uvs[0] * bc_screen.x + uvs[1] * bc_screen.y + uvs[2] * bc_screen.z;
 				TGA_Color color = GlobalModel->diffuse(Vec2i(finalUv.x, finalUv.y));
-				Win32SetPixel(Buffer, P.x, P.y, RGB((int)(color.r* _color),(int)(color.g * _color), (int)(color.b * _color)));
+				glm::vec3 finalNorm = norms[0] * bc_screen.x + norms[1] * bc_screen.y + norms[2] * bc_screen.z;
+				/*finalNorm.x = finalNorm.x < 0 ? -finalNorm.x : finalNorm.x;
+				finalNorm.y = finalNorm.y < 0 ? -finalNorm.y : finalNorm.y;
+				finalNorm.z = finalNorm.z < 0 ? -finalNorm.z : finalNorm.z;*/
+				glm::vec3 lightDir(0, 0, 1);
+				float finalColor = glm::clamp(glm::dot(glm::normalize(finalNorm), lightDir), 0.0f, 1.0f);
+
+				//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(color.r* _color),(int)(color.g * _color), (int)(color.b * _color)));
+				Win32SetPixel(Buffer, P.x, P.y, RGB((int)(finalColor * 255), (int)(finalColor * 255), (int)(finalColor * 255)));
 
 			}
-			//Win32SetPixel(Buffer, P.x, P.y, RGB((int)(P.z), (int)(P.z), (int)(P.z)));
+	
 			
 		
 				
@@ -359,111 +337,6 @@ Win32DrawRect(win32_offscreen_buffer* Buffer, RECT rect, int color)
 }
 
 
-namespace L
-{
-	float ipart(float x)
-	{
-		return floor(x);
-	}
-
-	float round(float x)
-	{
-		return ipart(x + 0.5f);
-	}
-
-	float fpart(float x)
-	{
-		return x - floor(x);
-	}
-
-	float rfpart(float x)
-	{
-		return 1 - fpart(x);
-	}
-}
-
-void wuline(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int Color)
-{
-	using namespace L;
-	bool steep = abs(y1 - y0) > abs(x1 - x0);
-	if (steep)
-	{
-		std::swap(x0, y0);
-		std::swap(x1, y1);
-	}
-
-	if (x0 > x1)
-	{
-		std::swap(x0, x1);
-		std::swap(y0, y1);
-	}
-
-	float dx = x1 - x0;
-	float dy = y1 - y0;
-	float gradient;
-	if (dx == 0)
-	{
-		gradient = 1.0f;
-	}
-	else
-	{
-		gradient = dy / dx;
-	}
-
-	float xend = L::round(x0);
-	float yend = y0 + gradient * (xend - x0);
-	float xgap = rfpart(x0 + 0.5f);
-	float xpxl1 = xend;
-	float ypxl1 = ipart(yend);
-	if (steep)
-	{
-		Win32SetPixel(Buffer, ypxl1, xpxl1, 0xffffff * rfpart(yend) * xgap);
-		Win32SetPixel(Buffer, ypxl1 + 1, xpxl1, 0xffffff * fpart(yend) * xgap);
-	}
-	else
-	{
-		Win32SetPixel(Buffer, xpxl1, ypxl1, 0xffffff * rfpart(yend) * xgap);
-		Win32SetPixel(Buffer, xpxl1, ypxl1 + 1, 0xffffff * fpart(yend) * xgap);
-	}
-	float intery = yend + gradient;
-
-	xend = round(x1);
-	yend = y1 + gradient * (xend - x1);
-	xgap = fpart(x1 + 0.5f);
-	float xpxl2 = xend;
-	float ypxl2 = ipart(yend);
-
-	if (steep)
-	{
-		Win32SetPixel(Buffer, ypxl2, xpxl2, 0xffffff * rfpart(yend) * xgap);
-		Win32SetPixel(Buffer, ypxl2 + 1, xpxl2, 0xffffff * fpart(yend) * xgap);
-	}
-	else
-	{
-		Win32SetPixel(Buffer, xpxl2, ypxl2, 0xffffff * rfpart(yend) * xgap);
-		Win32SetPixel(Buffer, xpxl2, ypxl2 + 1, 0xffffff * fpart(yend) * xgap);
-	}
-
-	if (steep)
-	{
-		for (int x = xpxl1 + 1; x < xpxl2 - 1; x++)
-		{
-			Win32SetPixel(Buffer, ipart(intery), x, 0xffffff * rfpart(intery));
-			Win32SetPixel(Buffer, ipart(intery) + 1, x, 0xffffff * fpart(intery));
-			intery = intery + gradient;
-		}
-	}
-	else
-	{
-		for (int x = xpxl1 + 1; x < xpxl2 - 1; x++)
-		{
-			Win32SetPixel(Buffer, x, ipart(intery), 0xffffff * rfpart(intery));
-			Win32SetPixel(Buffer, x, ipart(intery) + 1, 0xffffff * fpart(intery));
-			intery = intery + gradient;
-		}
-	}
-}
-
 win32_window_dimension
 Win32GetWindowDimension(HWND Window)
 {
@@ -508,8 +381,8 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height)
 
 	if (Buffer->Memory)
 	{
-		//VirtualFree(Buffer->Memory, 0, MEM_RELEASE);
-		DeleteObject(Buffer->HBMP);
+		VirtualFree(Buffer->Memory, 0, MEM_RELEASE);
+		
 	}
 
 	Buffer->Width = Width;
@@ -527,7 +400,7 @@ Win32ResizeDIBSection(win32_offscreen_buffer *Buffer, int Width, int Height)
 	int BitmapMemorySize = (Buffer->Width*Buffer->Height)*BytesPerPixel;
 	Buffer->Memory = VirtualAlloc(0, BitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 	
-//	Buffer->HBMP = CreateDIBSection(DeviceContext, &Buffer->Info, DIB_RGB_COLORS, &Buffer->Memory, NULL,NULL);
+
 	Buffer->Pitch = Width*BytesPerPixel;
 }
 
@@ -703,8 +576,10 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 					lastY = YOffset;
 					dirty = true;
 				}
+
 				ScopedTimer time("Main-Loop");
 				MSG Message;
+
 				while (PeekMessageW(&Message, 0, 0, 0, PM_REMOVE))
 				{
 					if (Message.message == WM_QUIT)
@@ -715,9 +590,11 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 					TranslateMessage(&Message);
 					DispatchMessageW(&Message);
 				}
+
 				if (dirty)
 				{
-					Win32ClearBuffer(&GlobalBackBuffer, 0);
+					Win32ClearBuffer(&GlobalBackBuffer, RGB(255, 0, 255));
+
 					for (int i = size; i--;)
 					{
 
@@ -734,6 +611,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 						for (int j = 0; j<3; j++) {
 
 							Vec3f v = GlobalModel->vert(face[j]);
+							
 							glm::vec4 original(v.x, v.y, v.z, 1.0f);
 							original = glm::rotate(2*3.1415f, glm::vec3(1, 0, 0)) * original;
 							original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
@@ -763,12 +641,18 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 						if (intensity >= 0)
 						{
 							glm::vec2 uv[3];
+							glm::vec3 norms[3];
 							for (int k = 0; k < 3;k++)
 							{
 								uv[k] = glm::vec2(GlobalModel->uv(i, k).x, GlobalModel->uv(i, k).y);
 							}
+							for (int k = 0; k < 3; k++)
+							{
+								norms[k] = glm::vec3(GlobalModel->norm(i, k).x, GlobalModel->norm(i, k).y, GlobalModel->norm(i, k).z);
+							}
+							
 							//intensity = 1 - intensity;
-							triangle(screen_coords, uv, &GlobalBackBuffer, 1);
+							triangle(screen_coords, uv, norms, &GlobalBackBuffer, intensity);
 						}
 						
 

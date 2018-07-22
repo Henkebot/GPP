@@ -68,6 +68,12 @@ Vec3f Model::vert(int i) {
 	return verts_[i];
 }
 
+Vec3f Model::norm(int iface, int nvert)
+{
+	int idx = faces_[iface][nvert][2];
+	return norms_[idx];
+}
+
 void Model::load_texture(std::string filename, const char *suffix, TGA_Image &img) {
 	std::string texfile(filename);
 	size_t dot = texfile.find_last_of(".");
