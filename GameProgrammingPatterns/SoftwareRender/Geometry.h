@@ -1,5 +1,5 @@
 #pragma once
-
+#include <glm.hpp>
 #include <cmath>
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,48 +83,21 @@ static Vec3f cross(Vec3f l, Vec3f r)
 	return l^r;
 }
 
-static Vec3f 
-barycentric(Vec3f *pts, Vec3i P) 
-{
-	Vec3f p(P.x, P.y, P.z);
-	Vec3f a = pts[0];
-	Vec3f b = pts[1];
-	Vec3f c = pts[2];
+static glm::vec3
+barycentric(glm::vec2 *pts, glm::vec2 P)
+{	
+	glm::vec2 a = pts[0];
+	glm::vec2 b = pts[1];
+	glm::vec2 c = pts[2];
 
-	Vec3f v0 = b - a, v1 = c - a, v2 = p - a;
+	glm::vec2 v0 = b - a, v1 = c - a, v2 = P - a;
 	float InvDen =  1.0f / ( v0.x * v1.y - v1.x * v0.y);
 	float v = (v2.x * v1.y - v1.x * v2.y) * InvDen;
 	float w = (v0.x * v2.y - v2.x * v0.y) * InvDen;
 	float u = 1.0f - v - w;
 	if(v >= 0 && u >= 0 && (u+v) <= 1)
-		return Vec3f(u, v, w);
-	return Vec3f(-1, 1, 1);
-	////float s1 = pts[2].y - pts[0].y;
-	////float s2 = pts[2].x - pts[0].x;
-	////float s3 = pts[1].y - pts[0].y;
-	////float s4 = P.y - pts[0].y;
-
-	////float w1 = (pts[0].x * s1 + s4 * s2 - P.x * s1) / (s3 * s2 - (pts[1].x - pts[0].x) * s1);
-	////float w2 = (s4 - w1 * s3) / s1;
-	////if (w1 >= 0 && w2 >= 0 && (w1 + w2) <= 1)
-	////{
-	////	return Vec3f(w1, w2, P.z);
-	////}
-	////return Vec3f(-1, 1, 1);
-	//Vec3f A = pts[0];
-	//Vec3f B = pts[1];
-	//Vec3f C = pts[2];
-	//Vec3f s[2];
-	//for (int i = 2; i--; ) {
-	//	s[i][0] = C[i] - A[i];
-	//	s[i][1] = B[i] - A[i];
-	//	s[i][2] = A[i] - P[i];
-	//}
-	//Vec3f u = cross(s[0], s[1]);
-	//if (std::abs(u[2])>1e-2) // dont forget that u[2] is integer. If it is zero then triangle ABC is degenerate
-	//	return Vec3f(1.f - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
-	//return Vec3f(-1, 1, 1); // in this case generate negative coordinates, it will be thrown away by the rasterizator
-	//	
+		return glm::vec3(u, v, w);
+	return glm::vec3(-1, 1, 1);
 }
 	
 
