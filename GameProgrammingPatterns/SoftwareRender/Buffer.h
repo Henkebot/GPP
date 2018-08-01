@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <stdint.h>
+#include <glm.hpp>
 
 namespace MY3D
 {
@@ -44,7 +45,7 @@ namespace MY3D
 
 	};
 
-	class RGBBuffer : public Buffer
+	typedef class RGBBuffer : public Buffer
 	{
 	private:
 		BITMAPINFO	m_Info;
@@ -57,6 +58,7 @@ namespace MY3D
 
 		void Resize(int _width, int _height);
 		void Clear(int _value = 0);
+		void SetPixel(glm::vec2 _coord, glm::vec4 _color);
 		void SetPixel(int _x, int _y, int _value);
 		int GetPixel(int _x, int _y);
 
@@ -68,7 +70,7 @@ namespace MY3D
 		// RGB Specific
 		LPBITMAPINFO GetBitmapInfo();
 
-	};
+	} RGBBUFFER, *LPRGBBUFFER;
 
 
 

@@ -52,6 +52,11 @@ void MY3D::RGBBuffer::Clear(int _value)
 		//memset(m_Memory, _value, GetWidth() * GetHeight() * 4);
 }
 
+void MY3D::RGBBuffer::SetPixel(glm::vec2 _coord, glm::vec4 _color)
+{
+	SetPixel(_coord.x, _coord.y, RGB(_color.x, _color.y, _color.z, _color.w));
+}
+
 void MY3D::RGBBuffer::SetPixel(int _x, int _y, int _value)
 {
 

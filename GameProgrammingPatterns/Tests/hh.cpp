@@ -16,16 +16,6 @@
 #define local_persist static
 #define global_variable static
 
-typedef int8_t int8;
-typedef int16_t int16;
-typedef int32_t int32;
-typedef int64_t int64;
-
-typedef uint8_t uint8;
-typedef uint16_t uint16;
-typedef uint32_t uint32;
-typedef uint64_t uint64;
-
 #define RGBA(r,g,b,a) (a << 24 | r << 16 | g << 8 | b)
 #define RGB(r,g,b) RGBA(r,g,b,255)
 
@@ -37,15 +27,14 @@ struct win32_window_dimension
 };
 
 global_variable bool GlobalRunning;
-global_variable MY3D::RGBBuffer GlobalBackBuffer;
+//global_variable MY3D::RGBBuffer GlobalBackBuffer;
 global_variable float XOffset = 0;
 global_variable float YOffset = 0;
 global_variable int XMouse;
 global_variable int YMouse;
 global_variable float W;
 global_variable float S;
-global_variable Model* GlobalModel;
-global_variable MY3D::RGBBuffer GlobalZBuffer;
+//global_variable MY3D::RGBBuffer GlobalZBuffer;
 global_variable glm::mat4 lol;
 
 //
@@ -89,95 +78,81 @@ global_variable glm::mat4 lol;
 //		}
 //	}
 //}
-
-inline internal void
-triangle(glm::vec4 *pts, glm::vec2* uvs, glm::vec3* norms, MY3D::RGBBuffer* Buffer, float _color)
-{
-	glm::vec4 pts1[3];
-	for (int i = 0; i < 3; i++)
-	{
-		pts1[i] = pts[i] * lol;
-	}
-	glm::vec2 pts2[3];
-	glm::vec3 ptsForDepth[3];
-	// Pts2 are the projected points
-	for (int i = 0; i < 3; i++) pts2[i] = ptsForDepth[i] = (pts1[i] / pts1[i].w);
-
-
-	int Width = Buffer->GetWidth();
-	int Height = Buffer->GetHeight();
-	Vec2f bboxmin(Width, Height);
-	Vec2f bboxmax(-Width,-Height);
-	Vec2f clamp(Width, Height);
-	
-	for (int i = 3; i--;) {
-		for (int j = 2; j--;) {
-			bboxmin[j] = glm::max(0.f,		glm::min(bboxmin[j], pts2[i][j]));
-			bboxmax[j] = glm::min(clamp[j],	glm::max(bboxmax[j], pts2[i][j]));
-		}
-	}
-	glm::ivec2 P;
-	for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
-		for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
-
-			glm::vec3 bc_screen = barycentric(pts2, P);
-			
-			if (bc_screen.x < 0 || bc_screen.y < 0 || bc_screen.z < 0)
-				continue;
-
-			glm::vec3 bc_clip = glm::vec3(bc_screen.x / pts1[0].w, bc_screen.y / pts1[1].w, bc_screen.z / pts1[2].w);
-			bc_clip = bc_clip / (bc_clip.x + bc_clip.y + bc_clip.z);
-			
-			float currentDepth = GlobalZBuffer.GetPixel(P.x, P.y);
-			if (currentDepth == -1)
-				continue;
-
-			bool alreadyWritten = currentDepth != -50000.0000;
-			//if (alreadyWritten)
-			//{
-			//	Buffer->SetPixel(P.x, P.y, RGB(255, 255, 255));
-
-			//	float fragDepth = 0;
-			//	//glm::dot(glm::vec3(pts[2]), bc_clip);
-			//	for (int i = 3; i--;)
-			//		fragDepth -= ptsForDepth[i].z * bc_screen[i];
-
-			//	if (currentDepth > fragDepth)
-			//		continue;
-
-			//}
-			//else
-			//{
-				int fragDepth = 0;
-				//glm::dot(glm::vec3(pts[2]), bc_clip);
-				for (int i = 3; i--;)
-					fragDepth -= ptsForDepth[i].z * bc_clip[i];
-
-				if (currentDepth > fragDepth)
-					continue;
-
-
-
-				GlobalZBuffer.SetPixel(P.x, P.y, fragDepth);
-
-				glm::vec2 finalUv = uvs[0] * bc_clip.x + uvs[1] * bc_clip.y + uvs[2] * bc_clip.z;
-				TGA_Color color = GlobalModel->diffuse(Vec2i(finalUv.x, finalUv.y));
-				//color = TGA_Color(255, 255, 255, 255);
-				glm::vec3 finalNorm = norms[0] * bc_clip.x + norms[1] * bc_clip.y + norms[2] * bc_clip.z;
-
-				glm::vec3 lightDir(0, 0, 1);
-				float finalColor = glm::clamp(glm::dot(glm::normalize(finalNorm), lightDir), 0.f, 1.0f);
-
-
-				Buffer->SetPixel(P.x, P.y, RGB((int)(color.r * finalColor), (int)(color.g * finalColor), (int)(color.g * finalColor)));
-		
-			
-			
-
-				
-		}
-	}
-}
+//
+//inline internal void
+//triangle(glm::vec4 *pts, glm::vec2* uvs, glm::vec3* norms, MY3D::RGBBuffer* Buffer, float _color)
+//{
+//	glm::vec4 pts1[3];
+//	for (int i = 0; i < 3; i++)
+//	{
+//		pts1[i] = pts[i] * lol;
+//	}
+//	glm::vec2 pts2[3];
+//	glm::vec3 ptsForDepth[3];
+//	// Pts2 are the projected points
+//	for (int i = 0; i < 3; i++) pts2[i] = ptsForDepth[i] = (pts1[i] / pts1[i].w);
+//
+//
+//	int Width = Buffer->GetWidth();
+//	int Height = Buffer->GetHeight();
+//	Vec2f bboxmin(Width, Height);
+//	Vec2f bboxmax(-Width,-Height);
+//	Vec2f clamp(Width, Height);
+//	
+//	for (int i = 3; i--;) {
+//		for (int j = 2; j--;) {
+//			bboxmin[j] = glm::max(0.f,		glm::min(bboxmin[j], pts2[i][j]));
+//			bboxmax[j] = glm::min(clamp[j],	glm::max(bboxmax[j], pts2[i][j]));
+//		}
+//	}
+//	glm::ivec2 P;
+//	for (P.x = bboxmin.x; P.x <= bboxmax.x; P.x++) {
+//		for (P.y = bboxmin.y; P.y <= bboxmax.y; P.y++) {
+//
+//			glm::vec3 bc_screen = barycentric(pts2, P);
+//			
+//			if (bc_screen.x < 0 || bc_screen.y < 0 || bc_screen.z < 0)
+//				continue;
+//
+//			glm::vec3 bc_clip = glm::vec3(bc_screen.x / pts1[0].w, bc_screen.y / pts1[1].w, bc_screen.z / pts1[2].w);
+//			bc_clip = bc_clip / (bc_clip.x + bc_clip.y + bc_clip.z);
+//			
+//			float currentDepth = GlobalZBuffer.GetPixel(P.x, P.y);
+//			if (currentDepth == -1)
+//				continue;
+//
+//		
+//			float fragDepth = 0;
+//
+//			fragDepth += ptsForDepth[0].z * bc_clip[0];
+//			fragDepth += ptsForDepth[1].z * bc_clip[1];
+//			fragDepth += ptsForDepth[2].z * bc_clip[2];
+//			
+//			if (currentDepth > fragDepth)
+//				continue;
+//
+//
+//
+//			GlobalZBuffer.SetPixel(P.x, P.y, fragDepth);
+//
+//			glm::vec2 finalUv = uvs[0] * bc_clip.x + uvs[1] * bc_clip.y + uvs[2] * bc_clip.z;
+//			TGA_Color color = GlobalModel->diffuse(Vec2i(finalUv.x, finalUv.y));
+//			//color = TGA_Color(255, 255, 255, 255);
+//			glm::vec3 finalNorm = norms[0] * bc_clip.x + norms[1] * bc_clip.y + norms[2] * bc_clip.z;
+//
+//			glm::vec3 lightDir(0, 0, 1);
+//			float finalColor = glm::clamp(glm::dot(glm::normalize(finalNorm), lightDir), 0.f, 1.0f);
+//
+//
+//			Buffer->SetPixel(P.x, P.y, RGB((int)(color.r * finalColor), (int)(color.g * finalColor), (int)(color.g * finalColor)));
+//		
+//			
+//			
+//
+//				
+//		}
+//	}
+//}
 
 //inline internal void
 //Plot4EllipsePoints(win32_offscreen_buffer* Buffer, Vec2i org, int X, int Y, int Color)
@@ -380,8 +355,8 @@ Win32MainWindowCallback(HWND Window,
 	{
 	case WM_SIZE:
 	{
-		GlobalBackBuffer.Resize(LOWORD(LParam), HIWORD(LParam));
-		GlobalZBuffer.Resize(LOWORD(LParam), HIWORD(LParam));
+		/*GlobalBackBuffer.Resize(LOWORD(LParam), HIWORD(LParam));
+		GlobalZBuffer.Resize(LOWORD(LParam), HIWORD(LParam));*/
 
 	} break;
 	case WM_DESTROY:
@@ -439,10 +414,10 @@ Win32MainWindowCallback(HWND Window,
 
 		win32_window_dimension Dimension = Win32GetWindowDimension(Window);
 
-		Win32DisplayRGBBufferInWindow(DeviceContext,
+	/*	Win32DisplayRGBBufferInWindow(DeviceContext,
 			Dimension.Width,
 			Dimension.Height,
-			&GlobalBackBuffer);
+			&GlobalBackBuffer);*/
 		EndPaint(Window, &Paint);
 	} break;
 
@@ -455,6 +430,48 @@ Win32MainWindowCallback(HWND Window,
 	return(Result);
 }
 
+class MyShader : public MY3D::SHADER
+{
+private:
+
+	glm::mat4 rotation;
+public:
+	
+
+	glm::vec4 Vertex(int vertexID)
+	{
+		Vec3f v = m_data->vert(vertexID);
+
+		glm::vec4 result{ v.x, v.y,v.z,1.0f };
+		rotation = glm::rotate(2 * 3.1415f, glm::vec3(1, 0, 0)) * glm::rotate(XOffset, glm::vec3(0, 1, 0));
+
+
+		glm::vec4 projected = m_mat4["proj"] * m_mat4["view"] * rotation * result;
+		return projected;
+	}
+
+	glm::vec4 Fragment(int face, glm::vec3 inter)
+	{
+
+		glm::vec2 uv = glm::vec2(m_data->uv(face, 0).x, m_data->uv(face, 0).y) * inter[0] +
+			glm::vec2(m_data->uv(face, 1).x, m_data->uv(face, 1).y) * inter[1] +
+			glm::vec2(m_data->uv(face, 2).x, m_data->uv(face, 2).y) * inter[2];
+			
+		
+		glm::vec3 norms= glm::vec3(m_data->norm(face,0).x, m_data->norm(face, 0).y, m_data->norm(face, 0).z) * inter[0] +
+			glm::vec3(m_data->norm(face, 1).x, m_data->norm(face, 1).y, m_data->norm(face, 1).z) * inter[1] +
+			glm::vec3(m_data->norm(face, 2).x, m_data->norm(face, 2).y, m_data->norm(face, 2).z) * inter[2];
+		
+		norms = rotation * glm::vec4(norms, 1.0f);
+		TGA_Color color = m_data->diffuse(Vec2i(uv.x, uv.y));
+		
+		glm::vec3 lightDir(1, 0, 0);
+
+		float finalColor = glm::clamp(glm::dot(glm::normalize(norms), lightDir), 0.f, 1.0f);
+		
+		return glm::vec4(finalColor * color.b, finalColor * color.g, finalColor * color.r, 1.0f);
+	}
+};
 
 
 int CALLBACK
@@ -470,7 +487,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
 	WindowClass.hInstance = Instance;
 	WindowClass.lpszClassName = L"HandmadeHeroWindowClass";
-	GlobalModel = new Model("SoftwareRender/obj/african_head.obj");
+	
 	
 	if (RegisterClassW(&WindowClass))
 	{
@@ -492,9 +509,12 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 			HDC GlobalDeviceContext = GetDC(Window);
 
 			win32_window_dimension Dimension = Win32GetWindowDimension(Window);
-			GlobalBackBuffer.Resize(Dimension.Width, Dimension.Height);
+		/*	GlobalBackBuffer.Resize(Dimension.Width, Dimension.Height);
 			GlobalZBuffer.Resize(Dimension.Width, Dimension.Height);
 			
+			*/
+			MY3D::RenderDevice rd;
+			rd.SetBufferSize(Dimension.Width, Dimension.Height);
 			
 
 			
@@ -504,22 +524,26 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 			MY3D::VIEWPORT vp;
 			vp.Width = Dimension.Width;
 			vp.Height = Dimension.Height;
-			vp.Far = 10000.f;
+			vp.Far = 512.f;
 			vp.Near = 1.f;
 			vp.X = 0;
 			vp.Y = 0;
-			lol = MY3D::SetViewport(vp);
-			projection = glm::perspectiveFovLH(45.f, (float)GlobalBackBuffer.GetWidth(), (float)GlobalBackBuffer.GetHeight(), 1.f, 255.f);
+			rd.SetViewport(vp);
+			glm::vec2 dim = rd.GetBufferSize();
+			projection = glm::perspectiveFovLH(45.f, (float)dim.x, (float)dim.y, 1.f, 255.f);
 
-		
+			MY3D::SHADER* myShader = new MyShader();
+			myShader->m_data = new Model("SoftwareRender/obj/african_head.obj");
+
+			myShader->setUniform4x4f("proj", projection);
 			glm::vec3 position(0, 0, YOffset + 10);
-	
+			rd.SetShader(myShader);
 			GlobalRunning = true;
 			
 			while (GlobalRunning)
 			{
-				float w = GlobalBackBuffer.GetWidth();
-				float h = GlobalBackBuffer.GetHeight();
+				/*float w = GlobalBackBuffer.GetWidth();
+				float h = GlobalBackBuffer.GetHeight();*/
 				local_persist float lastX;
 				local_persist float lastY;
 				bool dirty = false;
@@ -553,74 +577,78 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 				
 				if (dirty)
 				{
-					projection = glm::perspectiveFovLH(45.f, (float)GlobalBackBuffer.GetWidth(), (float)GlobalBackBuffer.GetHeight(), .1f, 10000.f);
+					
 					view = glm::lookAtLH(glm::vec3(0, 0, 2 + YOffset), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-					GlobalBackBuffer.Clear(RGB(0, 0, 0));
-					GlobalZBuffer.Clear(-INT_MAX);
+					myShader->setUniform4x4f("view", view);
+					rd.Clear(COLOR_BUFFER | DEPTH_BUFFER);
+					rd.Render();
+					/*GlobalBackBuffer.Clear(RGB(0, 0, 0));
+					GlobalZBuffer.Clear(-INT_MAX);*/
 					
 
-					for (int i = 0; i<GlobalModel->nfaces(); i++) {
-						std::vector<int> face = GlobalModel->face(i);
-						glm::vec4 screen_coords[3];
-						glm::vec3 world_coords[3];
 
-						for (int j = 0; j<3; j++) {
+					//for (int i = 0; i<GlobalModel->nfaces(); i++) {
+					//	std::vector<int> face = GlobalModel->face(i);
+					//	glm::vec4 screen_coords[3];
+					//	glm::vec3 world_coords[3];
 
-							// This vert is sent to a vertex shader
-							Vec3f v = GlobalModel->vert(face[j]);
-							
-							glm::vec4 original(v.x, v.y, v.z, 1.0f);
-							original = glm::rotate(2*3.1415f, glm::vec3(1, 0, 0)) * original;
-							
-							original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
-							
+					//	for (int j = 0; j<3; j++) {
 
-							glm::vec4 projected = projection *view* original;
-							// Vertex Shader ends here
+					//	
+					//		Vec3f v = GlobalModel->vert(face[j]);
+					//		
+					//		glm::vec4 original(v.x, v.y, v.z, 1.0f);
+					//		original = glm::rotate(2*3.1415f, glm::vec3(1, 0, 0)) * original;
+					//		
+					//		original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
+					//		
 
-
-							// This is something that happends between the vertex and fragment shader
-							glm::vec4 ndc = projected;
+					//		glm::vec4 projected = projection *view* original;
+					//		// Vertex Shader ends here
 
 
-						/*	Legacy viewport transformation, is now done by a matrix
-							ndc.x = ((w * 0.5f) * ndc.x) + ((w * 0.5f));
-							ndc.y = ((h * 0.5f) * ndc.y) + ((h * 0.5f));
-							ndc.z = (((1000.f - 1.f) * 0.5f) * ndc.z) + ((1000.f + 1.f) * 0.5f);*/
-							
-
-							glm::vec4 winCoords = ndc;
-							// This is sent to the Fragment shader
-							screen_coords[j] = winCoords;
-							// Need to make this happend if the user demands
-							world_coords[j] = view* original;
-						}
-						
-						glm::vec3 n = glm::cross(world_coords[1] - world_coords[0], world_coords[2] - world_coords[0]);
-						n = glm::normalize(n);
-					
-						float intensity = glm::dot(n, -world_coords[0]);
-						if (intensity >= 0)
-						{
-							glm::vec2 uv[3];
-							glm::vec3 norms[3];
-							for (int k = 0; k < 3;k++)
-							{
-								uv[k] = glm::vec2(GlobalModel->uv(i, k).x, GlobalModel->uv(i, k).y);
-							}
-							for (int k = 0; k < 3; k++)
-							{
-								norms[k] = glm::vec3(GlobalModel->norm(i, k).x, GlobalModel->norm(i, k).y, GlobalModel->norm(i, k).z);
-							}
-							
-						
-							triangle(screen_coords, uv, norms, &GlobalBackBuffer, intensity);
-						}
-						
+					//		// This is something that happends between the vertex and fragment shader
+					//		glm::vec4 ndc = projected;
 
 
+					//	/*	Legacy viewport transformation, is now done by a matrix
+					//		ndc.x = ((w * 0.5f) * ndc.x) + ((w * 0.5f));
+					//		ndc.y = ((h * 0.5f) * ndc.y) + ((h * 0.5f));
+					//		ndc.z = (((1000.f - 1.f) * 0.5f) * ndc.z) + ((1000.f + 1.f) * 0.5f);*/
+					//		
 
-					}
+					//		glm::vec4 winCoords = ndc;
+					//		// This is sent to the Fragment shader
+					//		screen_coords[j] = winCoords;
+					//		// Need to make this happend if the user demands
+					//		world_coords[j] = view* original;
+					//	}
+					//	
+					//	glm::vec3 n = glm::cross(world_coords[1] - world_coords[0], world_coords[2] - world_coords[0]);
+					//	n = glm::normalize(n);
+					//
+					//	float intensity = glm::dot(n, -world_coords[0]);
+					//	if (intensity >= 0)
+					//	{
+					//		glm::vec2 uv[3];
+					//		glm::vec3 norms[3];
+					//		for (int k = 0; k < 3;k++)
+					//		{
+					//			uv[k] = glm::vec2(GlobalModel->uv(i, k).x, GlobalModel->uv(i, k).y);
+					//		}
+					//		for (int k = 0; k < 3; k++)
+					//		{
+					//			norms[k] = glm::vec3(GlobalModel->norm(i, k).x, GlobalModel->norm(i, k).y, GlobalModel->norm(i, k).z);
+					//		}
+					//		
+					//	
+					//		triangle(screen_coords, uv, norms, &GlobalBackBuffer, intensity);
+					//	}
+					//	
+
+
+
+					//}
 
 					
 					
@@ -632,7 +660,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 				Win32DisplayRGBBufferInWindow(GlobalDeviceContext,
 					Dimension.Width,
 					Dimension.Height,
-					&GlobalBackBuffer);
+					rd.GetFrontBuffer());
 
 			}
 		}
