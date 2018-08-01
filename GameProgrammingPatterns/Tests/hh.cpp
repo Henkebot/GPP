@@ -329,9 +329,6 @@ Win32DisplayRGBBufferInWindow(HDC DeviceContext,
 	MY3D::RGBBuffer* Buffer)
 {
 
-
-	/*SelectObject(hMemDC, hDCBitmap);
-	DeleteDC(hMemDC);*/
 	StretchDIBits(DeviceContext,
 
 		0, 0, WindowWidth, WindowHeight,
@@ -440,7 +437,7 @@ public:
 
 	glm::vec4 Vertex(int vertexID)
 	{
-		Vec3f v = m_data->vert(vertexID);
+		glm::vec4 v{ m_data->vert(vertexID),1.0f };
 
 		glm::vec4 result{ v.x, v.y,v.z,1.0f };
 		rotation = glm::rotate(2 * 3.1415f, glm::vec3(1, 0, 0)) * glm::rotate(XOffset, glm::vec3(0, 1, 0));
@@ -453,21 +450,21 @@ public:
 	glm::vec4 Fragment(int face, glm::vec3 inter)
 	{
 
-		glm::vec2 uv = glm::vec2(m_data->uv(face, 0).x, m_data->uv(face, 0).y) * inter[0] +
-			glm::vec2(m_data->uv(face, 1).x, m_data->uv(face, 1).y) * inter[1] +
-			glm::vec2(m_data->uv(face, 2).x, m_data->uv(face, 2).y) * inter[2];
+		glm::ivec2 uv = m_data->uv(face, 0) * inter[0] +
+						m_data->uv(face, 1) * inter[1] +
+						m_data->uv(face, 2) * inter[2];
 			
 		
-		glm::vec3 norms= glm::vec3(m_data->norm(face,0).x, m_data->norm(face, 0).y, m_data->norm(face, 0).z) * inter[0] +
-			glm::vec3(m_data->norm(face, 1).x, m_data->norm(face, 1).y, m_data->norm(face, 1).z) * inter[1] +
-			glm::vec3(m_data->norm(face, 2).x, m_data->norm(face, 2).y, m_data->norm(face, 2).z) * inter[2];
+		glm::vec3 norms= m_data->norm(face,0) * inter[0] +
+						m_data->norm(face, 1) * inter[1] +
+						m_data->norm(face, 2)* inter[2];
 		
 		norms = rotation * glm::vec4(norms, 1.0f);
-		TGA_Color color = m_data->diffuse(Vec2i(uv.x, uv.y));
+		TGA_Color color = m_data->diffuse(uv);
 		
-		glm::vec3 lightDir(1, 0, 0);
+		const glm::vec3 lightDir(0, 0, 1);
 
-		float finalColor = glm::clamp(glm::dot(glm::normalize(norms), lightDir), 0.f, 1.0f);
+		float finalColor = glm::clamp(glm::dot(glm::normalize(norms), lightDir), 0.2f, 1.0f);
 		
 		return glm::vec4(finalColor * color.b, finalColor * color.g, finalColor * color.r, 1.0f);
 	}
@@ -508,14 +505,18 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 		{
 			HDC GlobalDeviceContext = GetDC(Window);
 
-			win32_window_dimension Dimension = Win32GetWindowDimension(Window);
-		/*	GlobalBackBuffer.Resize(Dimension.Width, Dimension.Height);
-			GlobalZBuffer.Resize(Dimension.Width, Dimension.Height);
 			
-			*/
+			const win32_window_dimension res[3] =
+			{
+				{256,144},
+				{1280, 720},
+				{1920,1080}
+			};
+			
+			win32_window_dimension Dimension = res[0];
+
 			MY3D::RenderDevice rd;
 			rd.SetBufferSize(Dimension.Width, Dimension.Height);
-			
 
 			
 			glm::mat4 projection(1.0f);
@@ -542,21 +543,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 			
 			while (GlobalRunning)
 			{
-				/*float w = GlobalBackBuffer.GetWidth();
-				float h = GlobalBackBuffer.GetHeight();*/
-				local_persist float lastX;
-				local_persist float lastY;
-				bool dirty = false;
-				if (lastX != XOffset)
-				{
-					lastX = XOffset;
-					dirty = true;
-				}
-				if (lastY != YOffset)
-				{
-					lastY = YOffset;
-					dirty = true;
-				}
+				
 
 				ScopedTimer time("Main-Loop");
 				MSG Message;
@@ -572,90 +559,15 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 					DispatchMessageW(&Message);
 				}
 				
-				
-				
-				
-				if (dirty)
-				{
-					
-					view = glm::lookAtLH(glm::vec3(0, 0, 2 + YOffset), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
-					myShader->setUniform4x4f("view", view);
-					rd.Clear(COLOR_BUFFER | DEPTH_BUFFER);
-					rd.Render();
-					/*GlobalBackBuffer.Clear(RGB(0, 0, 0));
-					GlobalZBuffer.Clear(-INT_MAX);*/
-					
+				view = glm::lookAtLH(glm::vec3(0, 0, 2 + YOffset), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
 
+				myShader->setUniform4x4f("view", view);
 
-					//for (int i = 0; i<GlobalModel->nfaces(); i++) {
-					//	std::vector<int> face = GlobalModel->face(i);
-					//	glm::vec4 screen_coords[3];
-					//	glm::vec3 world_coords[3];
+				rd.Clear(COLOR_BUFFER | DEPTH_BUFFER);
 
-					//	for (int j = 0; j<3; j++) {
-
-					//	
-					//		Vec3f v = GlobalModel->vert(face[j]);
-					//		
-					//		glm::vec4 original(v.x, v.y, v.z, 1.0f);
-					//		original = glm::rotate(2*3.1415f, glm::vec3(1, 0, 0)) * original;
-					//		
-					//		original = glm::rotate(XOffset, glm::vec3(0, 1, 0)) * original;
-					//		
-
-					//		glm::vec4 projected = projection *view* original;
-					//		// Vertex Shader ends here
-
-
-					//		// This is something that happends between the vertex and fragment shader
-					//		glm::vec4 ndc = projected;
-
-
-					//	/*	Legacy viewport transformation, is now done by a matrix
-					//		ndc.x = ((w * 0.5f) * ndc.x) + ((w * 0.5f));
-					//		ndc.y = ((h * 0.5f) * ndc.y) + ((h * 0.5f));
-					//		ndc.z = (((1000.f - 1.f) * 0.5f) * ndc.z) + ((1000.f + 1.f) * 0.5f);*/
-					//		
-
-					//		glm::vec4 winCoords = ndc;
-					//		// This is sent to the Fragment shader
-					//		screen_coords[j] = winCoords;
-					//		// Need to make this happend if the user demands
-					//		world_coords[j] = view* original;
-					//	}
-					//	
-					//	glm::vec3 n = glm::cross(world_coords[1] - world_coords[0], world_coords[2] - world_coords[0]);
-					//	n = glm::normalize(n);
-					//
-					//	float intensity = glm::dot(n, -world_coords[0]);
-					//	if (intensity >= 0)
-					//	{
-					//		glm::vec2 uv[3];
-					//		glm::vec3 norms[3];
-					//		for (int k = 0; k < 3;k++)
-					//		{
-					//			uv[k] = glm::vec2(GlobalModel->uv(i, k).x, GlobalModel->uv(i, k).y);
-					//		}
-					//		for (int k = 0; k < 3; k++)
-					//		{
-					//			norms[k] = glm::vec3(GlobalModel->norm(i, k).x, GlobalModel->norm(i, k).y, GlobalModel->norm(i, k).z);
-					//		}
-					//		
-					//	
-					//		triangle(screen_coords, uv, norms, &GlobalBackBuffer, intensity);
-					//	}
-					//	
-
-
-
-					//}
+				rd.Render();
 
 					
-					
-				
-
-				}
-			
 				win32_window_dimension Dimension = Win32GetWindowDimension(Window);
 				Win32DisplayRGBBufferInWindow(GlobalDeviceContext,
 					Dimension.Width,
@@ -666,13 +578,13 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 		}
 		else
 		{
-			// TODO(casey) Logging
+			// TODO(Henrik) Logging
 		}
 	}
 	else
 	{
 
-		// TODO(casey): Logging
+		// TODO(Henrik): Logging
 	}
 
 	return (0);

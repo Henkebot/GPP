@@ -62,8 +62,8 @@ namespace MY3D
 		void SetPixel(int _x, int _y, int _value);
 		int GetPixel(int _x, int _y);
 
-		int GetWidth() const;
-		int GetHeight() const;
+		inline int GetWidth() const;
+		inline int GetHeight() const;
 
 		LPVOID GetBufferData();
 

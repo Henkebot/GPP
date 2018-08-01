@@ -62,10 +62,8 @@ void MY3D::RenderDevice::SetShader(LPSHADER _shader)
 
 void MY3D::RenderDevice::Render()
 {
-	
 	for (int i = m_Shader->m_data->nfaces(); i--;)
 	{
-
 		std::vector<int> face = m_Shader->m_data->face(i);
 		// For every triangle we run the vertex shader 3 times
 		glm::vec4 points[3];
@@ -74,7 +72,7 @@ void MY3D::RenderDevice::Render()
 			points[j] = m_Shader->Vertex(face[j]);
 		}
 
-		//Backface culling
+		//Backface culling, Projected points
 		float ax = points[0].x - points[1].x;
 		float ay = points[0].y - points[1].y;
 		float bx = points[0].x - points[2].x;
@@ -85,10 +83,8 @@ void MY3D::RenderDevice::Render()
 		{
 			// Now when we got the points we can send them to the rasterizer
 			_Triangle(i, points);
-
 		}
 
-		
 	}
 }
 
@@ -97,24 +93,45 @@ MY3D::LPRGBBUFFER MY3D::RenderDevice::GetFrontBuffer()
 	return &m_frontBuffer;
 }
 
+static glm::vec3 inline
+barycentric(glm::vec2 *pts, glm::vec2 P)
+{
+	glm::vec2 a = pts[0];
+	glm::vec2 b = pts[1];
+	glm::vec2 c = pts[2];
+
+	glm::vec2 v0 = b - a, v1 = c - a, v2 = P - a;
+	float InvDen = 1.0f / (v0.x * v1.y - v1.x * v0.y);
+	float v = (v2.x * v1.y - v1.x * v2.y) * InvDen;
+	float w = (v0.x * v2.y - v2.x * v0.y) * InvDen;
+	float u = 1.0f - v - w;
+	if (v >= 0 && u >= 0 && (u + v) <= 1)
+		return glm::vec3(u, v, w);
+	return glm::vec3(-1, 1, 1);
+}
+
+
 void MY3D::RenderDevice::_Triangle(int faceID, glm::vec4 * pts)
 {
 	glm::vec4 pts1[3];
-	for (int i = 0; i < 3; i++)
-	{
-		pts1[i] = pts[i] * m_ViewportMat;
-	}
+
+	pts1[0] = pts[0] * m_ViewportMat;
+	pts1[1] = pts[1] * m_ViewportMat;
+	pts1[2] = pts[2] * m_ViewportMat;
+
 	glm::vec2 pts2[3];
 	glm::vec3 ptsForDepth[3];
 	// Pts2 are the projected points
-	for (int i = 0; i < 3; i++) pts2[i] = ptsForDepth[i] = (pts1[i] / pts1[i].w);
+	pts2[0] = ptsForDepth[0] = (pts1[0] / pts1[0].w);
+	pts2[1] = ptsForDepth[1] = (pts1[1] / pts1[1].w);
+	pts2[2] = ptsForDepth[2] = (pts1[2] / pts1[2].w);
 
 
 	int Width = m_frontBuffer.GetWidth();
 	int Height = m_frontBuffer.GetHeight();
-	Vec2f bboxmin(Width, Height);
-	Vec2f bboxmax(-Width, -Height);
-	Vec2f clamp(Width, Height);
+	glm::vec2 bboxmin(Width, Height);
+	glm::vec2 bboxmax(-Width, -Height);
+	glm::vec2 clamp(Width, Height);
 
 	for (int i = 3; i--;) {
 		for (int j = 2; j--;) {
@@ -145,15 +162,14 @@ void MY3D::RenderDevice::_Triangle(int faceID, glm::vec4 * pts)
 			fragDepth += ptsForDepth[1].z * bc_clip[1];
 			fragDepth += ptsForDepth[2].z * bc_clip[2];
 
-			if (currentDepth > fragDepth)
-				continue;
-	
-			m_zBuffer.SetPixel(P.x, P.y, fragDepth);
+			if (currentDepth < fragDepth)
+			{
+				m_zBuffer.SetPixel(P.x, P.y, fragDepth);
 
-			//fragments.push_back({ P, bc_clip });
+				glm::vec4 color = m_Shader->Fragment(faceID, bc_clip);
+				m_frontBuffer.SetPixel(P, color);
 
-			glm::vec4 color = m_Shader->Fragment(faceID, bc_clip);
-			m_frontBuffer.SetPixel(P, color);
+			}
 
 		}
 	}

@@ -1,15 +1,15 @@
 #pragma once
 
 #include <vector>
-#include "Geometry.h"
+#include <glm.hpp>
 #include "../Other/tgaimage.h"
 
 class Model {
 private:
-	std::vector<Vec3f> verts_;
-	std::vector<std::vector<Vec3i> > faces_; // attention, this Vec3i means vertex/uv/normal
-	std::vector<Vec3f> norms_;
-	std::vector<Vec2f> uv_;
+	std::vector<glm::vec3> verts_;
+	std::vector<std::vector<glm::ivec3> > faces_; // attention, this Vec3i means vertex/uv/normal
+	std::vector<glm::vec3> norms_;
+	std::vector<glm::vec3> uv_;
 	TGA_Image diffusemap_;
 	void load_texture(std::string filename, const char *suffix, TGA_Image &img);
 public:
@@ -17,9 +17,9 @@ public:
 	~Model();
 	int nverts();
 	int nfaces();
-	Vec3f vert(int i);
-	Vec3f norm(int iface, int nvert);
-	Vec2i uv(int iface, int nvert);
-	TGA_Color diffuse(Vec2i uv);
+	glm::vec3 vert(int i);
+	glm::vec3 norm(int iface, int nvert);
+	glm::vec2 uv(int iface, int nvert);
+	TGA_Color diffuse(glm::ivec2 uv);
 	std::vector<int> face(int idx);
 };

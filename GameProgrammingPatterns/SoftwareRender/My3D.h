@@ -66,7 +66,7 @@ namespace MY3D
 		void Render();
 		LPRGBBUFFER GetFrontBuffer();
 	private:
-		void _Triangle(int faceID, glm::vec4 *pts);
+		inline void _Triangle(int faceID, glm::vec4 *pts);
 		
 
 	};
