@@ -1,0 +1,7 @@
+﻿  Test.cpp
+  Generating code
+  116 of 254 functions (45.7%) were compiled, the rest were copied from previous compilation.
+    10 functions were new in current compilation
+    32 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  GameProgrammingPatterns.vcxproj -> D:\Code\GPP\GameProgrammingPatterns\x64\Release\GameProgrammingPatterns.exe

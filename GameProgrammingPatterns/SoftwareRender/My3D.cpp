@@ -67,22 +67,25 @@ void MY3D::RenderDevice::Render()
 		std::vector<int> face = m_Shader->m_data->face(i);
 		// For every triangle we run the vertex shader 3 times
 		glm::vec4 points[3];
-		for (int j = 3; j--;)
+		points[0] = m_Shader->Vertex(face[0]);
+		points[1] = m_Shader->Vertex(face[1]);
+		points[2] = m_Shader->Vertex(face[2]);
+		
+		if (points[0].w>0 && points[1].w>0 && points[2].w>0)
 		{
-			points[j] = m_Shader->Vertex(face[j]);
-		}
+			//Backface culling, Projected points
+			double ax = points[0].x - points[1].x;
+			double ay = points[0].y - points[1].y;
+			double bx = points[0].x - points[2].x;
+			double by = points[0].y - points[2].y;
+			double cz = ax * by - ay * bx;
 
-		//Backface culling, Projected points
-		float ax = points[0].x - points[1].x;
-		float ay = points[0].y - points[1].y;
-		float bx = points[0].x - points[2].x;
-		float by = points[0].y - points[2].y;
-		float cz = ax * by - ay * bx;
+			if (cz < 0) // This triangle is frontfacing!
+			{
+				// Now when we got the points we can send them to the rasterizer
+				_Triangle(i, points);
+			}
 
-		if (cz < 0) // This triangle is frontfacing!
-		{
-			// Now when we got the points we can send them to the rasterizer
-			_Triangle(i, points);
 		}
 
 	}

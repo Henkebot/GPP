@@ -9,6 +9,7 @@
 #include <glm.hpp>
 #include <gtx\transform.hpp>
 #include <gtc/matrix_transform.hpp>
+
 #include "../SoftwareRender/Buffer.h"
 #include "../SoftwareRender/My3D.h"
 
@@ -24,12 +25,12 @@ struct win32_window_dimension
 {
 	int Width;
 	int Height;
+	int XPos;
+	int YPos;
 };
 
 global_variable bool GlobalRunning;
 //global_variable MY3D::RGBBuffer GlobalBackBuffer;
-global_variable float XOffset = 0;
-global_variable float YOffset = 0;
 global_variable int XMouse;
 global_variable int YMouse;
 global_variable float W;
@@ -37,6 +38,134 @@ global_variable float S;
 //global_variable MY3D::RGBBuffer GlobalZBuffer;
 global_variable glm::mat4 lol;
 
+global_variable bool KEY_W;
+global_variable bool KEY_S;
+global_variable bool KEY_D;
+global_variable bool KEY_A;
+global_variable bool KEY_F;
+
+#include<gtc\quaternion.hpp>
+
+class FPSCamera
+{
+private:
+	float m_fPitch;
+	float m_fYaw;
+	glm::quat m_camera_quat;
+	glm::mat4 m_viewMatrix;
+	glm::vec2 m_MousePosition2f;
+	glm::vec3 m_eyeVector;
+public:
+	FPSCamera() : m_fPitch(0), m_fYaw(0), m_MousePosition2f(0, 0), m_camera_quat(0, 0, 0, 0), m_eyeVector(0, 0, 0)
+	{
+
+	}
+	glm::vec3 GetForwardDirection(glm::quat quat)
+	{
+		// Extract the vector part of the quaternion
+		glm::vec3 u(quat.x, quat.y, quat.z);
+
+		// Extract the scalar part of the quaternion
+		float s = quat.w;
+		glm::vec3 v(0, 0, -1);
+		// Do the math
+		return(2.0f * glm::dot(u, v) * u
+			+ (s*s - dot(u, u)) * v
+			+ 2.0f * s * cross(u, v));
+	//	return quat * -glm::vec3(0, 0, -1) * glm::conjugate(quat);
+	}
+
+	glm::vec3 GetRightDirection(glm::quat quat)
+	{	
+		// Extract the vector part of the quaternion
+		glm::vec3 u(quat.x, quat.y, quat.z);
+
+		// Extract the scalar part of the quaternion
+		float s = quat.w;
+		glm::vec3 v(1, 0, 0);
+		// Do the math
+		return(2.0f * glm::dot(u, v) * u
+			+ (s*s - dot(u, u)) * v
+			+ 2.0f * s * cross(u, v));
+
+	}
+	glm::quat GetOrientation()
+	{
+		return glm::angleAxis(m_fYaw, glm::vec3(0, 1, 0)) * m_camera_quat * glm::angleAxis(m_fPitch, glm::vec3(1, 0, 0));
+	}
+	void UpdateView()
+	{
+
+		//temporary frame quaternion from pitch,yaw,roll 
+		//here roll is not used
+		
+		glm::quat key_quat = GetOrientation();
+		m_camera_quat = key_quat;
+		m_camera_quat = glm::normalize(m_camera_quat);
+	//	glm::quat key_quat = glm::angleAxis(m_fPitch, glm::vec3(1, 0, 0)) * glm::angleAxis(m_fYaw, glm::vec3(0, 1, 0));// glm::quat(glm::vec3(-m_fPitch, -m_fYaw, 0));
+		//reset values
+
+		glm::vec3 forward = GetForwardDirection(m_camera_quat);
+		glm::vec3 right = GetRightDirection(m_camera_quat);
+		if (KEY_W)
+		{
+			m_eyeVector -= forward * 0.01f;
+		}
+		else if (KEY_S)
+		{
+			m_eyeVector += forward * 0.01f;
+		}
+
+		if (KEY_A)
+		{
+			m_eyeVector -= right * 0.01f;
+		}
+		else if (KEY_D)
+		{
+			m_eyeVector += right * 0.01f;
+		}
+
+
+		m_fPitch = m_fYaw = 0;
+
+		////order matters,update camera_quat
+	
+		glm::mat4 rotate = glm::mat4_cast(glm::conjugate(m_camera_quat));
+
+		glm::mat4 translate = glm::mat4(1.0f);
+		translate = glm::translate(translate, -m_eyeVector);
+
+		m_viewMatrix = rotate * translate;
+
+	}
+	void MouseMove(int x, int y)
+	{
+		
+		
+		glm::vec2 currentMouse2f(x, y);
+		glm::vec2 mouseDx = currentMouse2f - glm::vec2(718 - 86, 438 - 109); //m_MousePosition2f;
+	
+		const float mouseX_sens = 0.0005f;
+		const float mouseY_sens = 0.0005f;
+		m_fPitch = mouseY_sens * mouseDx.y;
+		m_fYaw = mouseX_sens * mouseDx.x;
+		UpdateView();
+		m_MousePosition2f = currentMouse2f;
+		
+	}
+
+	void EyeMove(glm::vec3 _offset)
+	{
+		
+	
+	}
+
+	glm::mat4 getViewMat() const
+	{
+		return m_viewMatrix;
+	}
+
+};
 //
 //inline internal
 //void Win32DrawLine(int x0, int y0, int x1, int y1, win32_offscreen_buffer* Buffer, int color)
@@ -316,9 +445,11 @@ Win32GetWindowDimension(HWND Window)
 	win32_window_dimension Result;
 
 	RECT ClientRect;
-	GetClientRect(Window, &ClientRect);
+	GetWindowRect(Window, &ClientRect);
 	Result.Width = ClientRect.right - ClientRect.left;
 	Result.Height = ClientRect.bottom - ClientRect.top;
+	Result.XPos = ClientRect.left;
+	Result.YPos = ClientRect.top;
 
 	return (Result);
 }
@@ -380,16 +511,21 @@ Win32MainWindowCallback(HWND Window,
 		bool keyDown = (LParam & (1 << 31)) == 0;
 		bool isAltDown = (LParam & (1 << 29)) != 0;
 
-		
-		if(keyCode == 'W')
-			YOffset -=0.05f;
-		if (keyCode == 'S')
-			YOffset += 0.05f;
+		if (keyCode == VK_ESCAPE)
+			GlobalRunning = FALSE;
 
-		if (keyCode == 'D')
-			XOffset += 0.05f;
+		if (keyCode == 'W')
+			KEY_W = keyDown;
+		else if (keyCode == 'S')
+			KEY_S = keyDown;
+
 		if (keyCode == 'A')
-			XOffset -= 0.05f;
+			KEY_A = keyDown;
+		else if (keyCode == 'D')
+			KEY_D = keyDown;
+
+		if (keyCode == 'F')
+			KEY_F = keyDown;
 	
 		
 	} break;
@@ -399,6 +535,10 @@ Win32MainWindowCallback(HWND Window,
 		POINTS p = MAKEPOINTS(LParam);
 		XMouse = p.x;
 		YMouse = p.y;
+		win32_window_dimension dim  = Win32GetWindowDimension(Window);
+		int xValue = dim.XPos + (dim.Width >> 1);
+		int yValue = dim.YPos + (dim.Height >> 1);
+		SetCursorPos(xValue, yValue);
 		
 	} break;
 
@@ -431,24 +571,23 @@ class MyShader : public MY3D::SHADER
 {
 private:
 
-	glm::mat4 rotation;
+	glm::mat4 rotation = glm::rotate(2.f * 3.1415f, glm::vec3(1, 0, 0));
+	glm::vec3 lightdir = glm::vec3(1.f,0.f,1.f);
+	glm::vec3 viewdir = glm::vec3(0.f, 0.f, -1.0f);
 public:
 	
 
 	glm::vec4 Vertex(int vertexID)
 	{
 		glm::vec4 v{ m_data->vert(vertexID),1.0f };
-
-		glm::vec4 result{ v.x, v.y,v.z,1.0f };
-		rotation = glm::rotate(2 * 3.1415f, glm::vec3(1, 0, 0)) * glm::rotate(XOffset, glm::vec3(0, 1, 0));
-
-
-		glm::vec4 projected = m_mat4["proj"] * m_mat4["view"] * rotation * result;
+		
+		glm::vec4 projected = m_mat4["projview"]  * rotation * v;
 		return projected;
 	}
 
 	glm::vec4 Fragment(int face, glm::vec3 inter)
 	{
+		//inter = glm::vec3(0.3, 0.3, 0.3);
 
 		glm::ivec2 uv = m_data->uv(face, 0) * inter[0] +
 						m_data->uv(face, 1) * inter[1] +
@@ -459,14 +598,26 @@ public:
 						m_data->norm(face, 1) * inter[1] +
 						m_data->norm(face, 2)* inter[2];
 		
-		norms = rotation * glm::vec4(norms, 1.0f);
-		TGA_Color color = m_data->diffuse(uv);
-		
-		const glm::vec3 lightDir(0, 0, 1);
+		const float kPi = 3.14159264f;
+		const float kShininess = 16.0f;
 
-		float finalColor = glm::clamp(glm::dot(glm::normalize(norms), lightDir), 0.2f, 1.0f);
+		norms = glm::normalize(rotation * glm::vec4(norms, 1.0f));
+
+
+		glm::vec4 ambient(255.f*0.2f, 255.f*0.2f, 255.f*0.2f, 255.0f);
+
+		TGA_Color color = m_data->diffuse(uv);//TGA_Color(255.f* 0.247059f, 255.f * 0.282353f, 255.f * 0.8f, 255)
+		float finalColor = glm::clamp(glm::dot(norms, lightdir), 0.0f, 1.0f);
+		glm::vec4 diffuse = glm::vec4(finalColor * color.b, finalColor * color.g, finalColor * color.r, 255.0f);
+
+		const float kEnergyConservation = (8.f + kShininess) / (8.0f*kPi);
+		glm::vec3 halfwayDir = glm::normalize(lightdir + viewdir);
+		float spec = kEnergyConservation * glm::pow(glm::max(glm::dot(norms, halfwayDir), 0.0f), kShininess);
+
+		glm::vec4 specular(spec, spec, spec, 255.f);
 		
-		return glm::vec4(finalColor * color.b, finalColor * color.g, finalColor * color.r, 1.0f);
+
+		return glm::clamp(diffuse + specular,0.f,255.f);
 	}
 };
 
@@ -483,7 +634,7 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 	WindowClass.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
 	WindowClass.lpfnWndProc = Win32MainWindowCallback;
 	WindowClass.hInstance = Instance;
-	WindowClass.lpszClassName = L"HandmadeHeroWindowClass";
+	WindowClass.lpszClassName = L"SoftwareRender";
 	
 	
 	if (RegisterClassW(&WindowClass))
@@ -506,21 +657,22 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 			HDC GlobalDeviceContext = GetDC(Window);
 
 			
-			const win32_window_dimension res[3] =
+			const win32_window_dimension res[] =
 			{
 				{256,144},
+				{426,240},
 				{1280, 720},
 				{1920,1080}
 			};
 			
-			win32_window_dimension Dimension = res[0];
+			win32_window_dimension Dimension = res[1]; //Win32GetWindowDimension(Window);
 
 			MY3D::RenderDevice rd;
 			rd.SetBufferSize(Dimension.Width, Dimension.Height);
 
+			FPSCamera cam;
 			
 			glm::mat4 projection(1.0f);
-			glm::mat4 view(1.0f);
 
 			MY3D::VIEWPORT vp;
 			vp.Width = Dimension.Width;
@@ -535,12 +687,11 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 
 			MY3D::SHADER* myShader = new MyShader();
 			myShader->m_data = new Model("SoftwareRender/obj/african_head.obj");
+			
+			//myShader->setUniform4x4f("proj", projection);
 
-			myShader->setUniform4x4f("proj", projection);
-			glm::vec3 position(0, 0, YOffset + 10);
 			rd.SetShader(myShader);
 			GlobalRunning = true;
-			
 			while (GlobalRunning)
 			{
 				
@@ -559,11 +710,12 @@ WinMain(HINSTANCE Instance, // a handle to our executable
 					DispatchMessageW(&Message);
 				}
 				
-				view = glm::lookAtLH(glm::vec3(0, 0, 2 + YOffset), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0));
+		
+				cam.MouseMove(XMouse, YMouse);
 
-				myShader->setUniform4x4f("view", view);
+				myShader->setUniform4x4f("projview", projection * cam.getViewMat());
 
-				rd.Clear(COLOR_BUFFER | DEPTH_BUFFER);
+				rd.Clear(DEPTH_BUFFER);
 
 				rd.Render();
 
