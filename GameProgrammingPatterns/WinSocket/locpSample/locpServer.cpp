@@ -630,10 +630,12 @@ WorkerThread(LPVOID WorkThreadContext)
 				{
 					// Previous write operation completed for this socket, post another recv
 					lpIOContext->IOOperation = ClientIoRead;
+
 					dwRecvNumBytes = 0;
 					dwFlags = 0;
 					buffRecv.buf = lpIOContext->Buffer;
 					buffRecv.len = MAX_BUF_SIZE;
+
 					nRet = WSARecv(
 						lpPerSocketContext->Socket,
 						&buffRecv,
@@ -861,7 +863,6 @@ VOID CtxtListAddTo(LPPER_SOCKET_CONTEXT lpPerSocketContext)
 	}
 
 	LeaveCriticalSection(&g_CriticalSection);
-	return;
 }
 
 VOID CtxtListDeleteFrom(LPPER_SOCKET_CONTEXT lpPerSocketContext)
