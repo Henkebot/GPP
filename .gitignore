@@ -11,3 +11,10 @@
 *.log
 *.obj
 *.enc
+/Client/Debug/Client.tlog
+/Client/Release
+*.idb
+*.pdb
+*.tlog
+*.iobj
+*.ipdb
